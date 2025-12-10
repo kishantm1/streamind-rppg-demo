@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>rPPG ROI demo (minimal)</title>
+  <style>
+    body { margin: 0; background:#0b0b0b; color:#eee; font-family: system-ui, sans-serif; }
+    .wrap { padding:16px; max-width: 900px; margin:auto; }
+    .stack { position:relative; width:min(100%, 720px); }
+    video, canvas { width:100%; display:block; border-radius:12px; }
+    .hint { opacity:0.8; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1 style="margin:0 0 8px">Face ROI (forehead) demo</h1>
+    <div class="hint">Allow camera permission. We’ll draw a green box on the forehead using MediaPipe Face Landmarker.</div>
+    <div class="stack">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
+    </div>
+    <p id="status" class="hint">status: starting…</p>
+  </div>
+
+  <script type="module" src="./script.js"></script>
+</body>
+</html>
