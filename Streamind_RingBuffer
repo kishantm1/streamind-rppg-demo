@@ -54,20 +54,3 @@ class RingBuffer {
     }
 }
 
-
-
-// TEST CODE
-const rb = new RingBuffer(10, 4);
-
-const data = [
-  {t: 0.0, g: 100},
-  {t: 0.5, g: 105},
-  {t: 1.2, g: 102},
-  {t: 2.1, g: 108},
-];
-
-data.forEach(d => rb.push(d.t, d.g));
-
-console.log("fs =", rb.fs);
-console.log("values =", rb.values());
-
