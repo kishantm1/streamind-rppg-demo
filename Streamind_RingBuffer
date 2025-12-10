@@ -1,0 +1,73 @@
+class RingBuffer {
+    constructor (seconds = 10, targetFps = 30){
+        this.seconds = seconds;
+        this.targetFps = targetFps;
+        this.samples = []; //Array of t,g
+    }
+
+    push(t, g){
+        this.samples.push({t, g}); //Add new sample
+
+        //Remove old time samples 
+        const timeLimit = t - this.seconds; //oldest time to keep 
+        while(this.samples.length > 0 && this.samples[0][0] < timeLimit){
+            this.samples.shift(); //Remove oldest sample 
+        }
+    }
+
+    values(){
+        if (this.samples.length < 2) {
+            return { y: [], t0: 0, dt: 0, n: 0 };
+        }
+
+        
+        const t0 = this.samples[0].t;
+        const dt = 1 / this.targetFps; //time difference between samples, spacing between samples
+
+        const initial = t0;
+        const final = this.samples[this.samples.length - 1].t;
+        let n = Math.floor((final - initial) / dt); //number of samples 
+        if (n <= 0) n = 1;
+
+        let y = [];
+        for (let i = 0; i < n; i++) {
+            if (i < this.samples.length) 
+                y.push(this.samples[i].g); // Use the sample’s g value if available
+            else 
+                y.push(this.samples[this.samples.length - 1].g); // Otherwise repeat the last g
+        }
+
+        return { y, t0, dt, n };
+    }
+
+    get fs(){
+        if (this.samples.length < 2) return 0;
+
+        const initial = this.samples[0].t;
+        const final = this.samples[this.samples.length - 1].t;
+        const duration = final - initial;
+        return this.samples.length / duration; //samples/frames per sec
+    }
+
+    getSamples(){
+        return this.samples; 
+    }
+}
+
+
+
+// TEST CODE
+const rb = new RingBuffer(10, 4);
+
+const data = [
+  {t: 0.0, g: 100},
+  {t: 0.5, g: 105},
+  {t: 1.2, g: 102},
+  {t: 2.1, g: 108},
+];
+
+data.forEach(d => rb.push(d.t, d.g));
+
+console.log("fs =", rb.fs);
+console.log("values =", rb.values());
+
