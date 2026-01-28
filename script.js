@@ -1,4 +1,16 @@
-// minimal MediaPipe Face Landmarker demo with a forehead ROI rectangle.
+// script.js
+// This is the main controller of the demo.
+// It connects everything together. 
+// 1) Ask browser for camera access (getUserMedia)
+// 2) Load MediaPipe Face Landmarker model
+// 3) On each video frame:
+//    - detect face landmarks
+//    - compute forehead ROI rectangle
+//    - read pixels from that ROI and compute mean green value
+//    - store mean green value and timestamp into ring buffer
+//    - every second, compute BPM estimate from last 10s of green signal
+//    - draw landmarks, ROI box, and green signal plot on canvases
+
 
 import {
   FaceLandmarker,
@@ -6,87 +18,149 @@ import {
   DrawingUtils,
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12";
 
+import { foreheadRectFromLandmarks } from "./roi.js";
+import { getGreenMean } from "./green.js";
+import { RingBuffer } from "./buffer.js";
+import { estimateBpmFromWindow } from "./dsp.js";
+import { drawOverlay, drawPlot } from "./ui.js";
+
+// Grab elements from index.html using their IDs
 const video = document.getElementById("video");
 const overlay = document.getElementById("overlay");
-const ctx = overlay.getContext("2d");
+const octx = overlay.getContext("2d"); // drawing context for overlay canvas 
+
+const plot = document.getElementById("plot");
+const pctx = plot.getContext("2d"); // drawing context for plot canvas 
+
 const statusEl = document.getElementById("status");
+const bpmEl = document.getElementById("bpm");
 
-let landmarker, drawer;
+// Hidden canvas is not shown on screen.
+// It is used to read pixel data from current video frame.
+const frameCanvas = document.createElement("canvas");
+const fctx = frameCanvas.getContext("2d", { willReadFrequently: true });
 
-// very simple forehead box: take the face bounding box from landmarks,
-// then pick a strip near the top-middle as the ROI.
-function foreheadRectFromLandmarks(landmarks, W, H) {
-  let minX = 1, minY = 1, maxX = 0, maxY = 0;
-  for (const lm of landmarks) {
-    if (lm.x < minX) minX = lm.x;
-    if (lm.y < minY) minY = lm.y;
-    if (lm.x > maxX) maxX = lm.x;
-    if (lm.y > maxY) maxY = lm.y;
-  }
-  const x = minX * W, y = minY * H;
-  const w = (maxX - minX) * W, h = (maxY - minY) * H;
+let landmarker; // MediaPipe Face Landmarker model object
+let drawer; // MediaPipe helper for drawing landmarks
 
-  // ROI: top ~20% of face box, centered ~40% width
-  const roiH = Math.max(8, h * 0.20);
-  const roiW = Math.max(8, w * 0.40);
-  const roiX = Math.max(0, x + (w - roiW) / 2);
-  const roiY = Math.max(0, y + h * 0.08); // a bit below hairline
+// Store last 10 seconds of samples, then resample them to a fixed rate (30fps)
+const buf = new RingBuffer(10, 30); 
 
-  return { x: Math.round(roiX), y: Math.round(roiY), w: Math.round(roiW), h: Math.round(roiH) };
-}
+// Update BPM about once per second (not every single frame)
+let lastBpmUpdateTs = 0;
+let lastBpm = null;
 
 async function init() {
   try {
+    // Ask for camera access 
     statusEl.textContent = "status: requesting camera…";
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-    video.srcObject = stream;
-    await new Promise((r) => (video.onloadedmetadata = r));
-    video.play();
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" }, // front camera if possible
+      audio: false,
+    });
 
+    // Attach stream to the video element
+    video.srcObject = stream;
+
+    // Wait until the video knows its width/height
+    await new Promise((r) => (video.onloadedmetadata = r));
+    await video.play();
+
+    // Match canvas sizes to actual video resolution
     overlay.width = video.videoWidth;
     overlay.height = video.videoHeight;
+    frameCanvas.width = video.videoWidth;
+    frameCanvas.height = video.videoHeight;
 
-    statusEl.textContent = "status: loading model…";
+    // Load MediaPipe face landmark model
+    statusEl.textContent = "status: loading MediaPipe model…";
+
+    // FilesetResolver loads the WebAssembly files MediaPipe needs to run
     const files = await FilesetResolver.forVisionTasks(
       "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12/wasm"
     );
 
+    // Create the FaceLandmarker object (pretrained model)
     landmarker = await FaceLandmarker.createFromOptions(files, {
       baseOptions: {
         modelAssetPath:
           "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
       },
       numFaces: 1,
-      runningMode: "VIDEO",
+      runningMode: "VIDEO", 
     });
 
-    drawer = new DrawingUtils(ctx);
-    statusEl.textContent = "status: running (move your face into view)";
+    // DrawingUtils helps draw landmark dots
+    drawer = new DrawingUtils(octx);
+
+    statusEl.textContent = "status: running";
+
+    // Start the loop that runs every frame
     requestAnimationFrame(loop);
   } catch (e) {
+    // If something fails like camera blocked or model did not load
     console.error(e);
     statusEl.textContent = "error: " + e.message;
   }
 }
 
 function loop(ts) {
-  const res = landmarker?.detectForVideo(video, ts);
-  ctx.clearRect(0, 0, overlay.width, overlay.height);
+  /*
+    loop(ts) is called repeatedly by the browser.
+    ts = timestamp (in milliseconds automatically provided by browser.
+    requestAnimationFrame tries to run around 60 times per second if possible.
+  */
 
+  // Run face landmark detection on the current video frame
+  const res = landmarker?.detectForVideo(video, ts);
+
+  // Clear overlay canvas so we redraw new landmarks and ROI
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+
+  // If we got landmarks...
   if (res?.faceLandmarks?.length) {
     const lms = res.faceLandmarks[0];
 
-    // draw a few landmarks so users see it’s tracking (keeping it light)
-    drawer.drawLandmarks(lms, { radius: 1 });
-
-    // compute & draw forehead ROI
+    // Compute forehead ROI rectangle from landmarks
     const roi = foreheadRectFromLandmarks(lms, overlay.width, overlay.height);
-    ctx.strokeStyle = "#4caf50";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(roi.x, roi.y, roi.w, roi.h);
-  }
 
+    // Draw the current video frame onto hidden canvas so we can read pixel values inside ROI
+    fctx.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
+
+    // Extract mean green value from the ROI in this frame
+    const { g, t } = getGreenMean(fctx, roi, ts);
+
+    // Add this sample to ring buffer (keep last 10 seoconds)
+    buf.push(t, g);
+
+    // Draw landmarks and ROI on overlay
+    drawOverlay(octx, drawer, lms, roi);
+
+    // Draw the signal trace (mean green vs time)
+    const { y } = buf.values();
+    drawPlot(pctx, plot.width, plot.height, y);
+
+    // Update BPM once per second (not every frame)
+    if ((ts - lastBpmUpdateTs) > 1000) {
+      lastBpmUpdateTs = ts;
+
+      // Get evenly spaced window for DSP
+      const win = buf.values();
+
+      // Estimate BPM using FFT and peak detection
+      const bpm = estimateBpmFromWindow(win.y, 1 / win.dt);
+
+      // Save the last good BPM so it does not flicker to null
+      if (bpm != null && Number.isFinite(bpm)) {
+        lastBpm = bpm;
+      }
+      // Show BPM on screen
+      bpmEl.textContent = `bpm: ${lastBpm ? lastBpm.toFixed(0) : "—"}`;
+    }
+  }
+  // Schedule the next frame
   requestAnimationFrame(loop);
 }
 
+// Start everything
 init();
