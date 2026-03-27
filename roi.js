@@ -27,19 +27,29 @@ export function foreheadRectFromLandmarks(landmarks, W, H) {
   const w = (maxX - minX) * W;
   const h = (maxY - minY) * H;
 
-  // define forehead ROI as small strip near top center of face box
+  // define forehead ROI as larger strip near top center of face box
   // These fractions are hand tuned
-  const roiH = Math.max(8, h * 0.11); // ROI height (11% of face height)
+  const roiH = Math.max(8, h * 0.30); // ROI height (30% of face height)
   const roiW = Math.max(8, w * 0.30); // ROI width (30% of face width)
 
   // Center it horizontally
   const roiX = clamp(x + (w - roiW) / 2, 0, W - roiW);
 
   // Place it near the top of the face box
+  // This keeps top edge around 1% and bottom around ~31% (1% + 30%).
   const roiY = clamp(y + h * 0.01, 0, H - roiH);
 
   // Round to whole pixels
   return { x: Math.round(roiX), y: Math.round(roiY), w: Math.round(roiW), h: Math.round(roiH) };
+}
+
+// Return the triangle vertices used by ROI processing/drawing.
+export function roiTriangleFromRect(roi) {
+  return [
+    { x: roi.x, y: roi.y },
+    { x: roi.x + roi.w, y: roi.y },
+    { x: roi.x + roi.w / 2, y: roi.y + roi.h },
+  ];
 }
 
 // Clamp ensures values stay inside valid screen range

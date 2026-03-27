@@ -2,23 +2,25 @@
 // This file only handles drawing things on canvases
 // It does not do camera access or signal processing
 
+import { roiTriangleFromRect } from "./roi.js";
+
 export function drawOverlay(octx, drawer, landmarks, roi) {
-/* 
-  drawOverlay draws the landmark dots and forehead ROI rectangle 
-  Inputs:
-    octx = canvas drawing context for overlay canvas
-    drawer = MediaPipe helper that knows how to draw landmarks
-    landmarks = array of face landmarks (dots)
-    roi = rectangle object {x,y,w,h}
-  */
+  // Draw landmark dots on the face (if drawer is available)
+  if (drawer) {
+    drawer.drawLandmarks(landmarks, { radius: 1 });
+  }
 
-  // Draw landmark dots on the face 
-  drawer.drawLandmarks(landmarks, { radius: 1 });
+  // Draw the ROI as an inverted triangle using the same vertices as used in green computation
+  const [v1, v2, v3] = roiTriangleFromRect(roi);
 
-  // Draw the ROI rectangle (green box)
   octx.strokeStyle = "#4caf50"; // green color
   octx.lineWidth = 2; // thickness of outline
-  octx.strokeRect(roi.x, roi.y, roi.w, roi.h);
+  octx.beginPath();
+  octx.moveTo(v1.x, v1.y);
+  octx.lineTo(v2.x, v2.y);
+  octx.lineTo(v3.x, v3.y);
+  octx.closePath();
+  octx.stroke();
 }
 
 export function drawPlot(ctx, W, H, y) {
