@@ -19,6 +19,7 @@ import {
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12";
 
 import { foreheadRectFromLandmarks } from "./roi.js";
+import { cheekCirclesFromLandmarks } from "./cheek_roi.js";
 import { getGreenMean } from "./green.js";
 import { RingBuffer } from "./buffer.js";
 import { estimateBpmFromWindow } from "./dsp.js";
@@ -121,20 +122,42 @@ function loop(ts) {
   if (res?.faceLandmarks?.length) {
     const lms = res.faceLandmarks[0];
 
-    // Compute forehead ROI rectangle from landmarks
-    const roi = foreheadRectFromLandmarks(lms, overlay.width, overlay.height);
+    // Compute cheek ROI circles from landmarks
+    const rois = cheekCirclesFromLandmarks(
+      lms,
+      overlay.width,
+      overlay.height
+    );
+
+    // If we could not compute ROIs, skip this frame
+    if (!rois) {
+      requestAnimationFrame(loop);
+      return;
+    } 
 
     // Draw the current video frame onto hidden canvas so we can read pixel values inside ROI
     fctx.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
 
     // Extract mean green value from the ROI in this frame
-    const { g, t } = getGreenMean(fctx, roi, ts);
+    const left = getGreenMean(fctx, rois.leftCheek, ts);
+    const right = getGreenMean(fctx, rois.rightCheek, ts);
+
+    // average both cheeks (more stable signal)
+    const g = (left.g + right.g) / 2;
+    const t = left.t;
+
+    buf.push(t, g);
 
     // Add this sample to ring buffer (keep last 10 seoconds)
     buf.push(t, g);
 
     // Draw landmarks and ROI on overlay
-    drawOverlay(octx, drawer, lms, roi);
+    // still draw landmarks
+    drawOverlay(octx, drawer, lms, { x: 0, y: 0, w: 0, h: 0 });
+
+    // draw cheeks
+    drawCircle(octx, rois.leftCheek);
+    drawCircle(octx, rois.rightCheek);
 
     // Draw the signal trace (mean green vs time)
     const { y } = buf.values();
@@ -158,6 +181,20 @@ function loop(ts) {
       bpmEl.textContent = `bpm: ${lastBpm ? lastBpm.toFixed(0) : "—"}`;
     }
   }
+
+  // Helper to draw circle ROIs (cheeks)
+    function drawCircle(ctx, roi) {
+    const cx = roi.x + roi.w / 2;
+    const cy = roi.y + roi.h / 2;
+    const r = roi.w / 2;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
   // Schedule the next frame
   requestAnimationFrame(loop);
 }
