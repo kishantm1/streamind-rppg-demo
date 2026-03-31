@@ -1,0 +1,570 @@
+/* ============================================
+   Breathing Exercise Page Styles
+   Calming animations and smooth transitions
+   ============================================ */
+
+.breathing-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: var(--space-lg);
+  min-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Header */
+.breathing-header {
+  text-align: center;
+  margin-bottom: var(--space-xl);
+}
+
+.breathing-header h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-sm);
+}
+
+.breathing-subtitle {
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+}
+
+/* Pattern Selector */
+.pattern-selector {
+  display: flex;
+  gap: var(--space-md);
+  margin-bottom: var(--space-2xl);
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+.pattern-card {
+  flex: 1;
+  min-width: 180px;
+  max-width: 240px;
+  padding: var(--space-lg);
+  background: var(--card-bg);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  text-align: center;
+}
+
+.pattern-card:hover:not(:disabled) {
+  border-color: var(--calm-300);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.15);
+}
+
+.pattern-card.active {
+  border-color: var(--calm-500);
+  background: linear-gradient(135deg, var(--calm-50) 0%, var(--teal-50) 100%);
+}
+
+[data-theme="dark"] .pattern-card.active {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(20, 184, 166, 0.15) 100%);
+}
+
+.pattern-card:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pattern-name {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.pattern-description {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.pattern-timing {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: 'SF Mono', 'Consolas', monospace;
+  background: var(--bg-secondary);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-xs);
+}
+
+/* Breathing Container */
+.breathing-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-2xl);
+  position: relative;
+}
+
+/* Breathing Circle */
+.breathing-circle-wrapper {
+  position: relative;
+  width: 280px;
+  height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.breathing-circle-outer {
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--calm-400) 0%, var(--teal-500) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 0 40px rgba(14, 165, 233, 0.3),
+    0 0 80px rgba(20, 184, 166, 0.2),
+    inset 0 0 30px rgba(255, 255, 255, 0.1);
+  transition: transform 0.1s linear;
+  transform: scale(var(--circle-scale, 1));
+  z-index: 2;
+}
+
+.breathing-circle-inner {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--calm-500) 0%, var(--teal-600) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+.breathing-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  text-align: center;
+}
+
+.phase-name {
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.phase-timer {
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-top: var(--space-xs);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.phase-instruction {
+  font-size: 1rem;
+  opacity: 0.9;
+  margin-top: var(--space-xs);
+}
+
+/* Decorative Rings */
+.breathing-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid var(--calm-300);
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.ring-1 {
+  width: 240px;
+  height: 240px;
+  animation: ringPulse 4s ease-in-out infinite;
+}
+
+.ring-2 {
+  width: 260px;
+  height: 260px;
+  animation: ringPulse 4s ease-in-out infinite 1s;
+}
+
+.ring-3 {
+  width: 280px;
+  height: 280px;
+  animation: ringPulse 4s ease-in-out infinite 2s;
+}
+
+@keyframes ringPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.1;
+  }
+}
+
+/* Animation states */
+.breathing-in .breathing-ring {
+  animation: ringExpand var(--phase-duration) ease-in-out forwards;
+}
+
+.breathing-out .breathing-ring {
+  animation: ringContract var(--phase-duration) ease-in-out forwards;
+}
+
+.breathing-hold .breathing-ring {
+  animation: ringHold var(--phase-duration) ease-in-out infinite;
+}
+
+@keyframes ringExpand {
+  0% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1.3);
+    opacity: 0.5;
+  }
+}
+
+@keyframes ringContract {
+  0% {
+    transform: scale(1.3);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+}
+
+@keyframes ringHold {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Phase Indicators */
+.phase-indicators {
+  display: flex;
+  gap: var(--space-lg);
+  margin-top: var(--space-xl);
+}
+
+.phase-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  opacity: 0.5;
+  transition: opacity var(--transition-normal);
+}
+
+.phase-indicator.active {
+  opacity: 1;
+}
+
+.phase-indicator.completed {
+  opacity: 0.7;
+}
+
+.indicator-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--border-color);
+  transition: all var(--transition-normal);
+}
+
+.phase-indicator.active .indicator-dot {
+  background: var(--calm-500);
+  box-shadow: 0 0 10px var(--calm-400);
+  transform: scale(1.2);
+}
+
+.phase-indicator.completed .indicator-dot {
+  background: var(--teal-500);
+}
+
+.indicator-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.phase-indicator.active .indicator-label {
+  color: var(--calm-500);
+  font-weight: 600;
+}
+
+/* Controls */
+.breathing-controls {
+  display: flex;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.control-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-lg);
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all var(--transition-normal);
+  min-width: 140px;
+}
+
+.control-button.primary {
+  background: linear-gradient(135deg, var(--calm-500) 0%, var(--teal-500) 100%);
+  color: white;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.3);
+}
+
+.control-button.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
+}
+
+.control-button.primary:active {
+  transform: translateY(0);
+}
+
+.control-button.secondary {
+  background: var(--card-bg);
+  color: var(--calm-600);
+  border: 2px solid var(--calm-500);
+}
+
+.control-button.secondary:hover {
+  background: var(--calm-50);
+}
+
+[data-theme="dark"] .control-button.secondary:hover {
+  background: rgba(14, 165, 233, 0.1);
+}
+
+.control-button.tertiary {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 2px solid var(--border-color);
+}
+
+.control-button.tertiary:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.control-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* Session Stats */
+.session-stats {
+  display: flex;
+  gap: var(--space-xl);
+  padding: var(--space-lg) var(--space-2xl);
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+  margin-bottom: var(--space-xl);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--calm-600);
+}
+
+[data-theme="dark"] .stat-value {
+  color: var(--calm-400);
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Instructions */
+.breathing-instructions {
+  background: var(--card-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  width: 100%;
+  max-width: 500px;
+  box-shadow: var(--card-shadow);
+}
+
+.breathing-instructions h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+}
+
+.breathing-instructions ol {
+  padding-left: var(--space-lg);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.8;
+}
+
+.breathing-instructions li {
+  padding-left: var(--space-sm);
+}
+
+.breathing-instructions li::marker {
+  color: var(--calm-500);
+  font-weight: 600;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .breathing-page {
+    padding: var(--space-md);
+  }
+
+  .breathing-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .pattern-selector {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pattern-card {
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .breathing-circle-wrapper {
+    width: 240px;
+    height: 240px;
+  }
+
+  .breathing-circle-outer {
+    width: 180px;
+    height: 180px;
+  }
+
+  .breathing-circle-inner {
+    width: 140px;
+    height: 140px;
+  }
+
+  .phase-name {
+    font-size: 1.2rem;
+  }
+
+  .phase-timer {
+    font-size: 2.5rem;
+  }
+
+  .ring-1 {
+    width: 200px;
+    height: 200px;
+  }
+
+  .ring-2 {
+    width: 220px;
+    height: 220px;
+  }
+
+  .ring-3 {
+    width: 240px;
+    height: 240px;
+  }
+
+  .breathing-controls {
+    flex-direction: column;
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .control-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .session-stats {
+    padding: var(--space-md) var(--space-lg);
+    gap: var(--space-lg);
+  }
+
+  .stat-value {
+    font-size: 1.25rem;
+  }
+
+  .phase-indicators {
+    gap: var(--space-md);
+  }
+}
+
+@media (max-width: 480px) {
+  .session-stats {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+/* Accessibility - Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .breathing-circle-outer {
+    transition: none;
+  }
+
+  .breathing-ring {
+    animation: none;
+  }
+
+  .breathing-in .breathing-ring,
+  .breathing-out .breathing-ring,
+  .breathing-hold .breathing-ring {
+    animation: none;
+  }
+
+  .control-button:hover {
+    transform: none;
+  }
+
+  .pattern-card:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Focus styles for accessibility */
+.pattern-card:focus-visible,
+.control-button:focus-visible {
+  outline: 3px solid var(--calm-400);
+  outline-offset: 2px;
+}

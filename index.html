@@ -1,65 +1,17 @@
-<!doctype html>
-<!--
-  index.html
-  This file defines the "webpage layout" (what appears on the screen).
-
-  HTML is like the skeleton of a webpage or what is on the page:
-  - video element = shows the camera feed
-  - overlay canvas = we draw landmarks + ROI box on top of the video
-  - plot canvas = we draw the green trace graph
-  - script.js = the actual logic (JavaScript) that makes everything happen
--->
+<!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>rPPG demo</title>
-  <style>
-    /* This is CSS styling (how things look like color, spacing, sizing).
-    - Dark background
-    - White text
-    - Video and canvases centered and rounded
-    */ 
-    body { margin: 0; background: #0b0b0b; color: #eee; font-family: system-ui, sans-serif; }
-    .wrap { padding:16px; max-width: 900px; margin:auto; }
-
-    /* .stack is a containr that lets us stack elements on top of each other.
-    We place the video first and then the overlay canvas directly on top of the video. 
-    We set "position:relative" so the overay canvas (which uses "position:absolute") will be placed relative to this box (on top of the video), not relative to the entire webpage.
-     */
-    .stack { position:relative; width:min(100%, 720px); }
-
-    /* Make video + canvas match width and look clean */
-    video, canvas { width:100%; display:block; border-radius:12px; }
-
-    /* The overlay canvas is the transparent drawing layer. "position:absolute" lets us place it on top of the video. */
-    #overlay { position:absolute; left:0; top:0; }
-    .hint { opacity:0.8; margin-top:10px; }
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <h1 style="margin:0 0 8px">rPPG Forehead ROI + BPM (starter)</h1>
-    <div class="hint">Allow camera permission. Green box = forehead ROI. Trace + BPM update below.</div>
-
-    <div class="stack">
-      <!-- This element displays live camera feed-->
-      <video id="video" autoplay playsinline muted></video>
-      <!-- This canvas is drawn ON TOP of the video to show landmarks and ROI -->
-      <canvas id="overlay"></canvas>
-    </div>
-
-    <!-- Status text updates like requesting camera, loading model, etc. -->
-    <p id="status" class="hint">status: starting…</p>
-
-    <!-- BPM value will update once per second -->
-    <p id="bpm" class="hint">bpm: —</p>
-
-    <!-- This canvas shows the green-channel trace over time -->
-    <canvas id="plot" width="720" height="120" style="margin-top:10px; width:min(100%,720px)"></canvas>
-  </div>
-
-  <!-- Load the JavaScript logic -->
-  <script type="module" src="./script.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0ea5e9" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>streamind - Heart Rate & Wellness</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
