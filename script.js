@@ -18,7 +18,7 @@ import {
   DrawingUtils,
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12";
 
-import { cheekTrianglesFromLandmarks  } from "./roi.js";
+import { cheekTrianglesFromLandmarks  } from "./cheek_roi.js";
 import { getGreenMeanInTriangle } from "./green.js";
 import { RingBuffer } from "./buffer.js";
 import { estimateBpmFromWindow } from "./dsp.js";
