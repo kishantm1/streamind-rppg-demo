@@ -163,29 +163,9 @@ function loop(ts) {
           bpmEl.textContent = `bpm: ${lastBpm ? lastBpm.toFixed(0) : "—"}`;
       }
     }
-//Draw landmarks on the overlay
-// drawOverlay expects some ROI arg, so we pass a fake rec
-    drawOverlay(octx, drawer, lms, { x: 0, y: 0, w: 0, h: 0 });
-// Draw cheek triangle rois
-    drawTriangle(octx, rois.leftCheek);
-    drawTriangle(octx, rois.rightCheek);
-
-          
-  }
+    // Schedule the next frame
+    requestAnimationFrame(loop);
 }
-  // Schedule the next frame
-  requestAnimationFrame(loop);
-}
-// draw function
-function drawTriangle(ctx, tri) {
-  ctx.beginPath();
-  ctx.moveTo(tri.a.x, tri.a.y);
-  ctx.lineTo(tri.b.x, tri.b.y);
-  ctx.lineTo(tri.c.x, tri.c.y);
-  ctx.closePath();
-  ctx.strokeStyle = "red";
-  ctx.lineWidth = 2;
-  ctx.stroke();
 
 // Start everything
 init();
