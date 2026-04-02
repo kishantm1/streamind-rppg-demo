@@ -14,25 +14,38 @@ export function getGreenMean(frameCtx, roi, tsMs) {
       t = timestamp in seconds
   */
   
-  const { x, y, w, h } = roi;
+  const { cx, cy, r } = roi;
 
-  // read raw pixel data from the ROI rectangle
-  // Each pixel is 4 bytes: R,G,B,A
-  const img = frameCtx.getImageData(x, y, w, h).data;
+  const x0 = cx - r;
+  const y0 = cy - r;
+  const size = r * 2;
+  const img = frameCtx.getImageData(x0, y0, size, size).data;
 
   let sumG = 0;
-  const nPixels = w * h;
+  let count = 0;
+  const r2 = r * r;
 
-  // Loop through pixels and sum only the green channel
-  for (let i = 0; i < img.length; i += 4) {
-    sumG += img[i + 1];
+  for (let row = 0; row < size; row++) {
+    for (let col = 0; col < size; col++) {
+      // Distance from this pixel to the center of the circle
+      const dx = col - r;
+      const dy = row - r;
+
+      // Skip pixels outside the circle
+      if (dx * dx + dy * dy > r2) continue;
+
+      // Each pixel is 4 bytes: R, G, B, A
+      const idx = (row * size + col) * 4;
+      sumG += img[idx + 1]; // green channel
+      count++;
+    }
   }
 
-  // Average green value
-  const g = sumG / nPixels;
+  // Average green value (guard against divide by zero)
+  const g = count > 0 ? sumG / count : 0;
 
-  // Convert ms to seconds 
-  const t = tsMs / 1000; 
+  // Convert ms to seconds
+  const t = tsMs / 1000;
 
   return { g, t };
 }

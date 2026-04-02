@@ -16,9 +16,11 @@ export function drawOverlay(octx, drawer, landmarks, roi) {
   drawer.drawLandmarks(landmarks, { radius: 1 });
 
   // Draw the ROI rectangle (green box)
-  octx.strokeStyle = "#4caf50"; // green color
-  octx.lineWidth = 2; // thickness of outline
-  octx.strokeRect(roi.x, roi.y, roi.w, roi.h);
+  octx.strokeStyle = "#4caf50";
+  octx.lineWidth = 2;
+  octx.beginPath();
+  octx.arc(roi.cx, roi.cy, roi.r, 0, 2 * Math.PI);
+  octx.stroke();
 }
 
 export function drawPlot(ctx, W, H, y) {
