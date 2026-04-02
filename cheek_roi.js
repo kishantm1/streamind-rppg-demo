@@ -1,96 +1,84 @@
 // cheek_roi.js
-// This file turns MediaPipe face landmarks into cheek triangle ROIs.
-// MediaPipe gives us many face landmark points (x,y) in normalized coordinates (0 to 1).
-// We pick a few landmarks on each cheek, convert them to pixel coordinates,
-// and build one inverted triangle on the left cheek and one on the right cheek.
+// Build left/right cheek ROIs from landmarks, then convert each cheek box
+// into an inverted triangle.
 
-export function cheekTrianglesFromLandmarks(landmarks, W, H) {
-  /*
-  Inputs:
-  landmarks = array of objects with normalized coordinates (lm.x, lm.y)
-  W, H = video/canvas width and height in pixels
-
-  Output:
-  {
-    leftCheek:  { a:{x,y}, b:{x,y}, c:{x,y} },
-    rightCheek: { a:{x,y}, b:{x,y}, c:{x,y} }
+export function cheekRectsFromLandmarks(landmarks, W, H) {
+  if (!landmarks || landmarks.length < 468) return null;
+  if (!Number.isFinite(W) || !Number.isFinite(H) || W <= 0 || H <= 0) {
+    return null;
   }
 
-  a and b are the two upper corners of the triangle
-  c is the bottom point, so the triangle points downward
-  */
+  function clamp(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+  }
 
-  // Make sure we actually got landmarks
-  if (!landmarks || landmarks.length < 468) return null;
-
-  // Convert one normalized landmark to pixel coordinates
-  function toPx(lm) {
+  function toPx(index) {
+    const lm = landmarks[index];
+    if (!lm) return null;
     return {
       x: lm.x * W,
       y: lm.y * H,
     };
   }
 
-  // Clamp ensures values stay inside valid screen range
-  function clamp(v, lo, hi) {
-    return Math.max(lo, Math.min(hi, v));
+  // Left cheek anchor landmarks
+  const lOuter = toPx(234);
+  const lInner = toPx(117);
+  const lLower = toPx(206);
+
+  // Right cheek anchor landmarks
+  const rInner = toPx(346);
+  const rOuter = toPx(454);
+  const rLower = toPx(426);
+
+  if (!lOuter || !lInner || !lLower || !rInner || !rOuter || !rLower) {
+    return null;
   }
 
-  // Clamp a whole point to stay inside the image
-  function clampPoint(p) {
-    return {
-      x: clamp(p.x, 0, W - 1),
-      y: clamp(p.y, 0, H - 1),
-    };
-  }
+  // Build a cheek rectangle from the anchor spread
+  const leftX = Math.min(lOuter.x, lInner.x);
+  const leftW = Math.abs(lInner.x - lOuter.x);
+  const leftTopY = Math.min(lOuter.y, lInner.y);
+  const leftH = Math.max(8, lLower.y - leftTopY);
 
-  // ---------------------------
-  // Choose landmarks for left cheek
-  // ---------------------------
-  // These are hand-tuned starter landmarks.
-  // You can change them later if the triangles sit too high, too low,
-  // too close to the nose, or too close to the jaw.
+  const rightX = Math.min(rInner.x, rOuter.x);
+  const rightW = Math.abs(rOuter.x - rInner.x);
+  const rightTopY = Math.min(rInner.y, rOuter.y);
+  const rightH = Math.max(8, rLower.y - rightTopY);
 
-  const leftUpperOuter = toPx(landmarks[234]); // outer side of left cheek
-  const leftUpperInner = toPx(landmarks[117]); // inner side of left cheek
-  const leftLowerBase = toPx(landmarks[206]);  // lower part of left cheek
-
-  // ---------------------------
-  // Choose landmarks for right cheek
-  // ---------------------------
-
-  const rightUpperInner = toPx(landmarks[346]); // inner side of right cheek
-  const rightUpperOuter = toPx(landmarks[454]); // outer side of right cheek
-  const rightLowerBase = toPx(landmarks[426]);  // lower part of right cheek
-
-  // ---------------------------
-  // Build inverted triangles
-  // ---------------------------
-  // a and b form the top edge of the triangle
-  // c is the lower point
-  // We nudge c slightly downward so the triangle covers a bit more cheek area
-
-  const leftCheek = {
-    a: clampPoint(leftUpperOuter),
-    b: clampPoint(leftUpperInner),
-    c: clampPoint({
-      x: leftLowerBase.x,
-      y: leftLowerBase.y + 6,
-    }),
+  const leftRect = {
+    x: Math.round(clamp(leftX, 0, W - 1)),
+    y: Math.round(clamp(leftTopY, 0, H - 1)),
+    w: Math.round(clamp(leftW, 8, W)),
+    h: Math.round(clamp(leftH, 8, H)),
   };
 
-  const rightCheek = {
-    a: clampPoint(rightUpperInner),
-    b: clampPoint(rightUpperOuter),
-    c: clampPoint({
-      x: rightLowerBase.x,
-      y: rightLowerBase.y + 6,
-    }),
+  const rightRect = {
+    x: Math.round(clamp(rightX, 0, W - 1)),
+    y: Math.round(clamp(rightTopY, 0, H - 1)),
+    w: Math.round(clamp(rightW, 8, W)),
+    h: Math.round(clamp(rightH, 8, H)),
   };
 
-  // Return both cheek triangle ROIs
+  return { leftRect, rightRect };
+}
+
+export function roiTriangleFromRect(roi) {
+  if (!roi) return null;
+
   return {
-    leftCheek,
-    rightCheek,
+    a: { x: roi.x, y: roi.y },
+    b: { x: roi.x + roi.w, y: roi.y },
+    c: { x: roi.x + roi.w / 2, y: roi.y + roi.h },
+  };
+}
+
+export function cheekTrianglesFromLandmarks(landmarks, W, H) {
+  const rects = cheekRectsFromLandmarks(landmarks, W, H);
+  if (!rects) return null;
+
+  return {
+    leftCheek: roiTriangleFromRect(rects.leftRect),
+    rightCheek: roiTriangleFromRect(rects.rightRect),
   };
 }
