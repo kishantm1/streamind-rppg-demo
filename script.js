@@ -1,16 +1,16 @@
 // script.js
 // This is the main controller of the demo.
-// It connects everything together. 
+// It connects everything together.
 // 1) Ask browser for camera access (getUserMedia)
 // 2) Load MediaPipe Face Landmarker model
 // 3) On each video frame:
 //    - detect face landmarks
-//    - compute forehead ROI rectangle
-//    - read pixels from that ROI and compute mean green value
+//    - compute left and right cheek triangle ROIs
+//    - read pixels from both cheek ROIs and compute mean green value
+//    - average left and right cheek green values into one signal sample
 //    - store mean green value and timestamp into ring buffer
 //    - every second, compute BPM estimate from last 10s of green signal
-//    - draw landmarks, ROI box, and green signal plot on canvases
-
+//    - draw landmarks, cheek ROIs, and green signal plot on canvases
 
 import {
   FaceLandmarker,
@@ -18,7 +18,7 @@ import {
   DrawingUtils,
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12";
 
-import { cheekTrianglesFromLandmarks  } from "./cheek_roi.js";
+import { cheekTrianglesFromLandmarks } from "./cheek_roi.js";
 import { getGreenMeanInTriangle } from "./green.js";
 import { RingBuffer } from "./buffer.js";
 import { estimateBpmFromWindow } from "./dsp.js";
@@ -27,10 +27,10 @@ import { drawOverlay, drawPlot } from "./ui.js";
 // Grab elements from index.html using their IDs
 const video = document.getElementById("video");
 const overlay = document.getElementById("overlay");
-const octx = overlay.getContext("2d"); // drawing context for overlay canvas 
+const octx = overlay.getContext("2d"); // drawing context for overlay canvas
 
 const plot = document.getElementById("plot");
-const pctx = plot.getContext("2d"); // drawing context for plot canvas 
+const pctx = plot.getContext("2d"); // drawing context for plot canvas
 
 const statusEl = document.getElementById("status");
 const bpmEl = document.getElementById("bpm");
@@ -40,11 +40,11 @@ const bpmEl = document.getElementById("bpm");
 const frameCanvas = document.createElement("canvas");
 const fctx = frameCanvas.getContext("2d", { willReadFrequently: true });
 
-let landmarker; // MediaPipe Face Landmarker model object
-let drawer; // MediaPipe helper for drawing landmarks
+let landmarker = null; // MediaPipe Face Landmarker model object
+let drawer = null; // MediaPipe helper for drawing landmarks
 
 // Store last 10 seconds of samples, then resample them to a fixed rate (30fps)
-const buf = new RingBuffer(10, 30); 
+const buf = new RingBuffer(10, 30);
 
 // Update BPM about once per second (not every single frame)
 let lastBpmUpdateTs = 0;
@@ -52,8 +52,19 @@ let lastBpm = null;
 
 async function init() {
   try {
-    // Ask for camera access 
+    // Make sure camera API exists in this browser/page context
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Camera API unavailable. Open with localhost or HTTPS.");
+    }
+
+    // Ask for camera access
     statusEl.textContent = "status: requesting camera…";
+
+    // These help the webcam video actually display in the page
+    video.autoplay = true;
+    video.muted = true;
+    video.playsInline = true;
+
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user" }, // front camera if possible
       audio: false,
@@ -63,7 +74,9 @@ async function init() {
     video.srcObject = stream;
 
     // Wait until the video knows its width/height
-    await new Promise((r) => (video.onloadedmetadata = r));
+    await new Promise((resolve) => {
+      video.onloadedmetadata = () => resolve();
+    });
     await video.play();
 
     // Match canvas sizes to actual video resolution
@@ -71,6 +84,10 @@ async function init() {
     overlay.height = video.videoHeight;
     frameCanvas.width = video.videoWidth;
     frameCanvas.height = video.videoHeight;
+
+    // Give the plot a usable size
+    plot.width = plot.clientWidth || 640;
+    plot.height = plot.clientHeight || 160;
 
     // Load MediaPipe face landmark model
     statusEl.textContent = "status: loading MediaPipe model…";
@@ -87,7 +104,7 @@ async function init() {
           "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
       },
       numFaces: 1,
-      runningMode: "VIDEO", 
+      runningMode: "VIDEO",
     });
 
     // DrawingUtils helps draw landmark dots
@@ -98,52 +115,108 @@ async function init() {
     // Start the loop that runs every frame
     requestAnimationFrame(loop);
   } catch (e) {
-    // If something fails like camera blocked or model did not load
-    console.error(e);
-    statusEl.textContent = "error: " + e.message;
+    // If something fails like camera blocked, insecure page, or model did not load
+    console.error("init failed:", e);
+    statusEl.textContent = "error: " + (e?.message || e);
   }
 }
 
 function loop(ts) {
-  const res = landmarker?.detectForVideo(video, ts);
+  /*
+  loop(ts) is called repeatedly by the browser.
+  ts = timestamp (in milliseconds) automatically provided by browser.
+  requestAnimationFrame tries to run around 60 times per second if possible.
+  */
 
-  octx.clearRect(0, 0, overlay.width, overlay.height);
+  try {
+    // If the model is not ready yet, try again next frame
+    if (!landmarker) {
+      requestAnimationFrame(loop);
+      return;
+    }
 
-  if (res?.faceLandmarks?.length) {
-    const lms = res.faceLandmarks[0];
-    const rois = cheekTrianglesFromLandmarks(lms, overlay.width, overlay.height);
+    // Run face landmark detection on the current video frame
+    const res = landmarker.detectForVideo(video, ts);
 
-    if (rois) {
-      fctx.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
+    // Clear overlay canvas so we redraw new landmarks and ROIs
+    octx.clearRect(0, 0, overlay.width, overlay.height);
 
-      const left = getGreenMeanInTriangle(fctx, rois.leftCheek, ts);
-      const right = getGreenMeanInTriangle(fctx, rois.rightCheek, ts);
+    // If we got landmarks...
+    if (res?.faceLandmarks?.length) {
+      const lms = res.faceLandmarks[0];
 
-      if (left && right && Number.isFinite(left.g) && Number.isFinite(right.g)) {
-        const g = (left.g + right.g) / 2;
-        const t = left.t;
+      // Compute left and right cheek triangle ROIs from landmarks
+      const rois = cheekTrianglesFromLandmarks(
+        lms,
+        overlay.width,
+        overlay.height
+      );
 
-        buf.push(t, g); // or whatever your buffer API is
+      if (rois) {
+        // Draw the current video frame onto hidden canvas
+        // so we can read pixel values inside both cheek ROIs
+        fctx.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
 
-        const { y } = buf.values();
-        drawPlot(pctx, plot.width, plot.height, y);
+        // Extract mean green value from the left cheek triangle
+        const left = getGreenMeanInTriangle(fctx, rois.leftCheek, ts);
 
-        if ((ts - lastBpmUpdateTs) > 1000) {
-          lastBpmUpdateTs = ts;
+        // Extract mean green value from the right cheek triangle
+        const right = getGreenMeanInTriangle(fctx, rois.rightCheek, ts);
 
-          const win = buf.values();
-          const bpm = estimateBpmFromWindow(win.y, 1 / win.dt);
+        // Only continue if both cheek samples are valid numbers
+        if (
+          left &&
+          right &&
+          Number.isFinite(left.g) &&
+          Number.isFinite(right.g)
+        ) {
+          // Average left and right cheek green values into one signal sample
+          const g = (left.g + right.g) / 2;
 
-          if (bpm != null && Number.isFinite(bpm)) {
-            lastBpm = bpm;
-          }
+          // Use the animation-frame timestamp as the sample time
+          const t = ts;
 
-          bpmEl.textContent = `bpm: ${lastBpm != null ? lastBpm.toFixed(0) : "--"}`;
+          // Add this sample to ring buffer (keep last 10 seconds)
+          buf.push(t, g);
         }
+
+        // Draw landmarks and cheek ROIs on overlay
+        drawOverlay(octx, drawer, lms, rois);
       }
     }
+
+    // Draw the signal trace (mean green vs time)
+    const { y } = buf.values();
+    drawPlot(pctx, plot.width, plot.height, y);
+
+    // Update BPM once per second (not every frame)
+    if ((ts - lastBpmUpdateTs) > 1000) {
+      lastBpmUpdateTs = ts;
+
+      // Get evenly spaced window for DSP
+      const win = buf.values();
+
+      // Only estimate BPM if buffer output looks valid
+      if (win?.y?.length && Number.isFinite(win.dt) && win.dt > 0) {
+        // Estimate BPM using FFT and peak detection
+        const bpm = estimateBpmFromWindow(win.y, 1 / win.dt);
+
+        // Save the last good BPM so it does not flicker to null
+        if (bpm != null && Number.isFinite(bpm)) {
+          lastBpm = bpm;
+        }
+      }
+
+      // Show BPM on screen
+      bpmEl.textContent = `bpm: ${lastBpm != null ? lastBpm.toFixed(0) : "--"}`;
+    }
+  } catch (e) {
+    // If one frame fails, show error but keep trying on the next frame
+    console.error("loop failed:", e);
+    statusEl.textContent = "error: " + (e?.message || e);
   }
 
+  // Schedule the next frame
   requestAnimationFrame(loop);
 }
 
