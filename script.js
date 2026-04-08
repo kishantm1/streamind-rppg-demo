@@ -142,29 +142,29 @@ function loop(ts) {
     drawOverlay(octx, drawer, lms, roi);
 
     // Draw the signal trace (mean green vs time)
-        const { y } = buf.values();
-        drawPlot(pctx, plot.width, plot.height, y);
+    const { y } = buf.values();
+    drawPlot(pctx, plot.width, plot.height, y);
 
     // Update BPM once per second (not every frame)
-        if ((ts - lastBpmUpdateTs) > 1000) {
-          lastBpmUpdateTs = ts;
+    if ((ts - lastBpmUpdateTs) > 1000) {
+        lastBpmUpdateTs = ts;
 
       // Get evenly spaced window for DSP
-          const win = buf.values();
+      const win = buf.values();
 
       // Estimate BPM using FFT and peak detection
-          const bpm = estimateBpmFromWindow(win.y, 1 / win.dt);
+      const bpm = estimateBpmFromWindow(win.y, 1 / win.dt);
 
       // Save the last good BPM so it does not flicker to null
-          if (bpm != null && Number.isFinite(bpm)) {
-            lastBpm = bpm;
+      if (bpm != null && Number.isFinite(bpm)) {
+        lastBpm = bpm;
       }
       // Show BPM on screen
-          bpmEl.textContent = `bpm: ${lastBpm ? lastBpm.toFixed(0) : "—"}`;
-      }
+      bpmEl.textContent = `bpm: ${lastBpm ? lastBpm.toFixed(0) : "—"}`;
     }
-    // Schedule the next frame
-    requestAnimationFrame(loop);
+  }
+  // Schedule the next frame
+  requestAnimationFrame(loop);
 }
 
 // Start everything
