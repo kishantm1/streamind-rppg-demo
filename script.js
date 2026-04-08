@@ -105,29 +105,17 @@ async function init() {
 }
 
 function loop(ts) {
-  /*
-    loop(ts) is called repeatedly by the browser.
-    ts = timestamp (in milliseconds automatically provided by browser.
-    requestAnimationFrame tries to run around 60 times per second if possible.
-  */
-
-  // Run face landmark detection on the current video frame
   const res = landmarker?.detectForVideo(video, ts);
 
-  // Clear overlay canvas so we redraw new landmarks and ROI
   octx.clearRect(0, 0, overlay.width, overlay.height);
 
-  // If we got landmarks...
   if (res?.faceLandmarks?.length) {
     const lms = res.faceLandmarks[0];
+    const rois = cheekTrianglesFromLandmarks(lms, overlay.width, overlay.height);
 
-    // Compute cheek ROI triangle from landmarks
-    const roi = cheekTrianglesFromLandmarks(lms, overlay.width, overlay.height);
-    // Draw the current video frame onto hidden canvas so we can read pixel values inside ROI
     if (rois) {
       fctx.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
 
-    // Extract mean green value from the ROI in this frame
       const left = getGreenMeanInTriangle(fctx, rois.leftCheek, ts);
       const right = getGreenMeanInTriangle(fctx, rois.rightCheek, ts);
 
@@ -135,35 +123,27 @@ function loop(ts) {
         const g = (left.g + right.g) / 2;
         const t = left.t;
 
-    // Add this sample to ring buffer (keep last 10 seoconds)
-        buf.push(t, g);
+        buf.push(t, g); // or whatever your buffer API is
 
-    // Draw landmarks and ROI on overlay
-    drawOverlay(octx, drawer, lms, roi);
+        const { y } = buf.values();
+        drawPlot(pctx, plot.width, plot.height, y);
 
-    // Draw the signal trace (mean green vs time)
-    const { y } = buf.values();
-    drawPlot(pctx, plot.width, plot.height, y);
+        if ((ts - lastBpmUpdateTs) > 1000) {
+          lastBpmUpdateTs = ts;
 
-    // Update BPM once per second (not every frame)
-    if ((ts - lastBpmUpdateTs) > 1000) {
-        lastBpmUpdateTs = ts;
+          const win = buf.values();
+          const bpm = estimateBpmFromWindow(win.y, 1 / win.dt);
 
-      // Get evenly spaced window for DSP
-      const win = buf.values();
+          if (bpm != null && Number.isFinite(bpm)) {
+            lastBpm = bpm;
+          }
 
-      // Estimate BPM using FFT and peak detection
-      const bpm = estimateBpmFromWindow(win.y, 1 / win.dt);
-
-      // Save the last good BPM so it does not flicker to null
-      if (bpm != null && Number.isFinite(bpm)) {
-        lastBpm = bpm;
+          bpmEl.textContent = `bpm: ${lastBpm != null ? lastBpm.toFixed(0) : "--"}`;
+        }
       }
-      // Show BPM on screen
-      bpmEl.textContent = `bpm: ${lastBpm ? lastBpm.toFixed(0) : "—"}`;
     }
   }
-  // Schedule the next frame
+
   requestAnimationFrame(loop);
 }
 
