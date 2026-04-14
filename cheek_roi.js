@@ -1,84 +1,66 @@
 // cheek_roi.js
-// Build left/right cheek ROIs from landmarks, then convert each cheek box
-// into an inverted triangle.
 
-export function cheekRectsFromLandmarks(landmarks, W, H) {
-  if (!landmarks || landmarks.length < 468) return null;
-  if (!Number.isFinite(W) || !Number.isFinite(H) || W <= 0 || H <= 0) {
-    return null;
-  }
+export function cheekCirclesFromLandmarks(landmarks, W, H) {
+  // More stable cheek landmarks
+  const LEFT = 234;
+  const RIGHT = 454;
+  const NOSE = 1;
+  const CHIN = 152;
 
-  function clamp(v, lo, hi) {
-    return Math.max(lo, Math.min(hi, v));
-  }
+  const l = landmarks[LEFT];
+  const r = landmarks[RIGHT];
+  const n = landmarks[NOSE];
+  const c = landmarks[CHIN];
 
-  function toPx(index) {
-    const lm = landmarks[index];
-    if (!lm) return null;
-    return {
-      x: lm.x * W,
-      y: lm.y * H,
-    };
-  }
+  if (!l || !r || !n || !c) return null;
 
-  // Left cheek anchor landmarks
-  const lOuter = toPx(234);
-  const lInner = toPx(117);
-  const lLower = toPx(206);
+  // Convert to pixels
+  const lx = l.x * W, ly = l.y * H;
+  const rx = r.x * W, ry = r.y * H;
+  const nx = n.x * W, ny = n.y * H;
+  const cy = c.y * H;
 
-  // Right cheek anchor landmarks
-  const rInner = toPx(346);
-  const rOuter = toPx(454);
-  const rLower = toPx(426);
+  // Face size references
+  const faceWidth = Math.abs(rx - lx);
+  const faceHeight = Math.abs(ly - cy);
 
-  if (!lOuter || !lInner || !lLower || !rInner || !rOuter || !rLower) {
-    return null;
-  }
+  // Better sizing
+  const d = Math.max(12, faceWidth * 0.30);
 
-  // Build a cheek rectangle from the anchor spread
-  const leftX = Math.min(lOuter.x, lInner.x);
-  const leftW = Math.abs(lInner.x - lOuter.x);
-  const leftTopY = Math.min(lOuter.y, lInner.y);
-  const leftH = Math.max(8, lLower.y - leftTopY);
+  // Move cheeks slightly DOWN and toward center
+  const verticalOffset = faceHeight * 0.15;
+  const inward = faceWidth * 0.20;
 
-  const rightX = Math.min(rInner.x, rOuter.x);
-  const rightW = Math.abs(rOuter.x - rInner.x);
-  const rightTopY = Math.min(rInner.y, rOuter.y);
-  const rightH = Math.max(8, rLower.y - rightTopY);
-
-  const leftRect = {
-    x: Math.round(clamp(leftX, 0, W - 1)),
-    y: Math.round(clamp(leftTopY, 0, H - 1)),
-    w: Math.round(clamp(leftW, 8, W)),
-    h: Math.round(clamp(leftH, 8, H)),
+  const leftCenter = {
+    x: lx + inward,
+    y: ly + verticalOffset,
   };
 
-  const rightRect = {
-    x: Math.round(clamp(rightX, 0, W - 1)),
-    y: Math.round(clamp(rightTopY, 0, H - 1)),
-    w: Math.round(clamp(rightW, 8, W)),
-    h: Math.round(clamp(rightH, 8, H)),
+  const rightCenter = {
+    x: rx - inward,
+    y: ry + verticalOffset,
   };
-
-  return { leftRect, rightRect };
-}
-
-export function roiTriangleFromRect(roi) {
-  if (!roi) return null;
 
   return {
-    a: { x: roi.x, y: roi.y },
-    b: { x: roi.x + roi.w, y: roi.y },
-    c: { x: roi.x + roi.w / 2, y: roi.y + roi.h },
+    leftCheek: circleToBox(leftCenter.x, leftCenter.y, d, W, H),
+    rightCheek: circleToBox(rightCenter.x, rightCenter.y, d, W, H),
   };
 }
 
-export function cheekTrianglesFromLandmarks(landmarks, W, H) {
-  const rects = cheekRectsFromLandmarks(landmarks, W, H);
-  if (!rects) return null;
+function circleToBox(cx, cy, d, W, H) {
+  const r = d / 2;
+
+  const x = clamp(cx - r, 0, W - d);
+  const y = clamp(cy - r, 0, H - d);
 
   return {
-    leftCheek: roiTriangleFromRect(rects.leftRect),
-    rightCheek: roiTriangleFromRect(rects.rightRect),
+    x: Math.round(x),
+    y: Math.round(y),
+    w: Math.round(d),
+    h: Math.round(d),
   };
+}
+
+function clamp(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
 }

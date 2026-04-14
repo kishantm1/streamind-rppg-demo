@@ -2,23 +2,56 @@
 // This file only handles drawing things on canvases
 // It does not do camera access or signal processing
 
-export function drawOverlay(octx, drawer, landmarks, roi) {
-/* 
-  drawOverlay draws the landmark dots and forehead ROI rectangle 
-  Inputs:
-    octx = canvas drawing context for overlay canvas
-    drawer = MediaPipe helper that knows how to draw landmarks
-    landmarks = array of face landmarks (dots)
-    roi = rectangle object {x,y,w,h}
-  */
+import { roiTriangleFromRect } from "./roi.js";
 
-  // Draw landmark dots on the face 
-  drawer.drawLandmarks(landmarks, { radius: 1 });
+// drawCircleROI draws a circle given a bounding box (x,y,w,h)
+function drawCircleROI(ctx, roi) {
+  const cx = roi.x + roi.w / 2;
+  const cy = roi.y + roi.h / 2;
+  const r = roi.w / 2;
+  
+  // Draw a circle using the arc method
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+}
 
-  // Draw the ROI rectangle (green box)
-  octx.strokeStyle = "#4caf50"; // green color
-  octx.lineWidth = 2; // thickness of outline
-  octx.strokeRect(roi.x, roi.y, roi.w, roi.h);
+// drawOverlay draws the face landmarks and ROIs on the overlay canvas
+export function drawOverlay(ctx, drawer, landmarks, rois) {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+  // Draw landmarks
+  if (drawer) {
+    drawer.drawLandmarks(landmarks, { radius: 1 });
+  }
+
+  // FOREHEAD TRIANGLE
+  if (rois?.forehead) {
+    const [v1, v2, v3] = roiTriangleFromRect(rois.forehead);
+
+    // Draw triangle
+    ctx.strokeStyle = "#4caf50";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(v1.x, v1.y);
+    ctx.lineTo(v2.x, v2.y);
+    ctx.lineTo(v3.x, v3.y);
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  // CHEEKS (circles)
+  if (rois?.cheeks?.leftCheek) {
+    ctx.strokeStyle = "blue";
+    ctx.lineWidth = 2;
+    drawCircleROI(ctx, rois.cheeks.leftCheek);
+  }
+  
+  if (rois?.cheeks?.rightCheek) {
+    ctx.strokeStyle = "blue";
+    ctx.lineWidth = 2;
+    drawCircleROI(ctx, rois.cheeks.rightCheek);
+  }
 }
 
 export function drawPlot(ctx, W, H, y) {
