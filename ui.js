@@ -2,25 +2,52 @@
 // This file only handles drawing things on canvases
 // It does not do camera access or signal processing
 
-import { roiTriangleFromRect } from "./roi.js";
+function drawTriangle(octx, triangle, style) {
+  if (!triangle || triangle.length < 3) return;
 
-export function drawOverlay(octx, drawer, landmarks, roi) {
-  // Draw landmark dots on the face (if drawer is available)
-  if (drawer) {
-    drawer.drawLandmarks(landmarks, { radius: 1 });
+  const [v1, v2, v3] = triangle;
+  octx.save();
+  octx.strokeStyle = style.strokeStyle || "#ff9800";
+  octx.lineWidth = style.lineWidth || 2;
+  if (style.fillStyle) {
+    octx.fillStyle = style.fillStyle;
+  }
+  if (style.lineDash) {
+    octx.setLineDash(style.lineDash);
   }
 
-  // Draw the ROI as an inverted triangle using the same vertices as used in green computation
-  const [v1, v2, v3] = roiTriangleFromRect(roi);
-
-  octx.strokeStyle = "#4caf50"; // green color
-  octx.lineWidth = 2; // thickness of outline
   octx.beginPath();
   octx.moveTo(v1.x, v1.y);
   octx.lineTo(v2.x, v2.y);
   octx.lineTo(v3.x, v3.y);
   octx.closePath();
+
+  if (style.fillStyle) {
+    octx.fill();
+  }
   octx.stroke();
+  octx.restore();
+}
+
+export function drawOverlay(octx, drawer, landmarks, rois) {
+  // Draw landmark dots on the face (if drawer is available)
+  if (drawer) {
+    drawer.drawLandmarks(landmarks, { radius: 1 });
+  }
+
+  if (rois?.leftCheek) {
+    drawTriangle(octx, rois.leftCheek, {
+      strokeStyle: "#ff9800",
+      fillStyle: "rgba(255, 152, 0, 0.15)",
+    });
+  }
+
+  if (rois?.rightCheek) {
+    drawTriangle(octx, rois.rightCheek, {
+      strokeStyle: "#ff9800",
+      fillStyle: "rgba(255, 152, 0, 0.15)",
+    });
+  }
 }
 
 export function drawPlot(ctx, W, H, y) {
