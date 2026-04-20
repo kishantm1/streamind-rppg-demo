@@ -1,65 +1,346 @@
 <!doctype html>
-<!--
-  index.html
-  This file defines the "webpage layout" (what appears on the screen).
-
-  HTML is like the skeleton of a webpage or what is on the page:
-  - video element = shows the camera feed
-  - overlay canvas = we draw landmarks + ROI box on top of the video
-  - plot canvas = we draw the green trace graph
-  - script.js = the actual logic (JavaScript) that makes everything happen
--->
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>rPPG demo</title>
   <style>
-    /* This is CSS styling (how things look like color, spacing, sizing).
-    - Dark background
-    - White text
-    - Video and canvases centered and rounded
-    */ 
-    body { margin: 0; background: #0b0b0b; color: #eee; font-family: system-ui, sans-serif; }
-    .wrap { padding:16px; max-width: 900px; margin:auto; }
+    body {
+      margin: 0;
+      background: #0b0b0b;
+      color: #eee;
+      font-family: system-ui, sans-serif;
+    }
 
-    /* .stack is a containr that lets us stack elements on top of each other.
-    We place the video first and then the overlay canvas directly on top of the video. 
-    We set "position:relative" so the overay canvas (which uses "position:absolute") will be placed relative to this box (on top of the video), not relative to the entire webpage.
-     */
-    .stack { position:relative; width:min(100%, 720px); }
+    .wrap {
+      padding: 16px;
+      max-width: 900px;
+      margin: auto;
+    }
 
-    /* Make video + canvas match width and look clean */
-    video, canvas { width:100%; display:block; border-radius:12px; }
+    .stack {
+      position: relative;
+      width: min(100%, 720px);
+    }
 
-    /* The overlay canvas is the transparent drawing layer. "position:absolute" lets us place it on top of the video. */
-    #overlay { position:absolute; left:0; top:0; }
-    .hint { opacity:0.8; margin-top:10px; }
+    video,
+    canvas {
+      width: 100%;
+      display: block;
+      border-radius: 12px;
+    }
+
+    #overlay {
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+
+    .hint {
+      opacity: 0.8;
+      margin-top: 10px;
+      font-size: 0.9rem;
+    }
+
+    /* ── Live readouts ── */
+    .bpm-row {
+      display: flex;
+      gap: 32px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+      align-items: baseline;
+    }
+
+    .bpm-block label {
+      display: block;
+      font-size: 0.72rem;
+      opacity: 0.5;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 2px;
+    }
+
+    .bpm-num {
+      font-size: 2rem;
+      font-weight: 700;
+    }
+
+    #rppg-value {
+      color: #7aa2ff;
+    }
+
+    #ble-value {
+      color: #4cda7e;
+    }
+
+    #ble-card {
+      opacity: 0.35;
+      transition: opacity 0.3s;
+    }
+
+    /* ── BLE button ── */
+    #bt-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    #btn-bt {
+      background: #1a2a1a;
+      color: #4cda7e;
+      border: 1px solid #2a4a2a;
+      border-radius: 8px;
+      padding: 7px 14px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transition: background 0.15s;
+    }
+
+    #btn-bt:hover {
+      background: #223022;
+    }
+
+    #btn-bt.connected {
+      border-color: #4cda7e;
+    }
+
+    #bt-status {
+      font-size: 0.78rem;
+      opacity: 0.5;
+    }
+
+    /* ── Comparison chart ── */
+    #chart-section {
+      margin-top: 16px;
+      width: min(100%, 720px);
+    }
+
+    #chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    #chart-label {
+      font-size: 0.75rem;
+      opacity: 0.5;
+      display: flex;
+      gap: 16px;
+    }
+
+    .leg {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .leg-line {
+      width: 14px;
+      height: 2px;
+      border-radius: 1px;
+      display: inline-block;
+    }
+
+    #chart {
+      border-radius: 10px;
+      background: #111;
+      display: block;
+      width: min(100%, 720px);
+    }
+
+    /* ── Plot ── */
+    #plot {
+      margin-top: 10px;
+      border-radius: 10px;
+      background: #111;
+      display: block;
+      width: min(100%, 720px);
+    }
+
+    /* ── History table ── */
+    #history-section {
+      margin-top: 20px;
+      width: min(100%, 720px);
+    }
+
+    #history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    #history-header h2 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      opacity: 0.9;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      background: #1e1e1e;
+      color: #eee;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button:hover {
+      background: #2a2a2a;
+    }
+
+    #table-wrap {
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      background: #161616;
+      padding: 7px 12px;
+      text-align: left;
+      font-weight: 600;
+      opacity: 0.7;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid #1c1c1c;
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody td {
+      padding: 6px 12px;
+    }
+
+    tbody td:nth-child(3) {
+      color: #7aa2ff;
+    }
+
+    tbody td:nth-child(4) {
+      color: #4cda7e;
+    }
+
+    tbody tr:first-child td {
+      font-weight: 500;
+    }
+
+    #empty-row td {
+      text-align: center;
+      opacity: 0.4;
+      padding: 18px;
+      color: #eee !important;
+      font-weight: normal !important;
+    }
   </style>
 </head>
+
 <body>
   <div class="wrap">
-    <h1 style="margin:0 0 8px">rPPG Forehead ROI + BPM (starter)</h1>
-    <div class="hint">Allow camera permission. Green box = forehead ROI. Trace + BPM update below.</div>
+    <h1 style="margin:0 0 4px">rPPG BPM Monitor</h1>
+    <div class="hint">Allow camera access. Green = forehead · Orange = left cheek · Blue = right cheek</div>
 
-    <div class="stack">
-      <!-- This element displays live camera feed-->
+    <div class="stack" style="margin-top:12px">
       <video id="video" autoplay playsinline muted></video>
-      <!-- This canvas is drawn ON TOP of the video to show landmarks and ROI -->
       <canvas id="overlay"></canvas>
     </div>
 
-    <!-- Status text updates like requesting camera, loading model, etc. -->
     <p id="status" class="hint">status: starting…</p>
 
-    <!-- BPM value will update once per second -->
-    <p id="bpm" class="hint">bpm: —</p>
+    <!-- Live readouts -->
+    <div class="bpm-row">
+      <div class="bpm-block">
+        <label>rPPG (camera)</label>
+        <div class="bpm-num" id="rppg-value">—</div>
+      </div>
+      <div class="bpm-block" id="ble-card">
+        <label>Device (BLE)</label>
+        <div class="bpm-num" id="ble-value">—</div>
+      </div>
+    </div>
 
-    <!-- This canvas shows the green-channel trace over time -->
-    <canvas id="plot" width="720" height="120" style="margin-top:10px; width:min(100%,720px)"></canvas>
+    <!-- BLE connect -->
+    <div id="bt-row">
+      <button id="btn-bt">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5" />
+        </svg>
+        Connect HR Monitor
+      </button>
+      <span id="bt-status">Works in Chrome / Edge on desktop or Android</span>
+    </div>
+
+    <!-- Comparison chart — always visible -->
+    <div id="chart-section">
+      <div id="chart-header">
+        <div id="chart-label">
+          <span class="leg"><span class="leg-line" style="background:#7aa2ff"></span>rPPG (camera)</span>
+          <span class="leg"><span class="leg-line" style="background:#4cda7e"></span>BLE device</span>
+        </div>
+        <button id="btn-save-png" style="font-size:0.75rem; padding:4px 10px;">Save chart as PNG</button>
+      </div>
+      <canvas id="chart" width="720" height="200"></canvas>
+    </div>
+
+    <!-- Signal trace -->
+    <canvas id="plot" width="720" height="100"></canvas>
+
+    <!-- History table -->
+    <div id="history-section">
+      <div id="history-header">
+        <h2>BPM History</h2>
+        <div class="btn-row">
+          <button id="btn-copy">Copy as text</button>
+          <button id="btn-clear">Clear</button>
+        </div>
+      </div>
+      <div id="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Time</th>
+              <th>rPPG</th>
+              <th>BLE</th>
+            </tr>
+          </thead>
+          <tbody id="history-body">
+            <tr id="empty-row">
+              <td colspan="4">No readings yet — stay still and wait ~9s</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
-
-  <!-- Load the JavaScript logic -->
   <script type="module" src="./script.js"></script>
 </body>
+
 </html>
