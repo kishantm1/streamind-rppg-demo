@@ -97,12 +97,67 @@ function posForRoi(frameCtx, roi) {
   return S1 + S2;          // ≈  (R + B - 2G) / G
 }
 
+function rgbMeanForRoi(frameCtx, roi) {
+  const { x, y, w, h } = roi;
+  if (w <= 0 || h <= 0) return null;
+
+  const img = frameCtx.getImageData(x, y, w, h).data;
+  const n = w * h;
+  if (n === 0) return null;
+
+  let sumR = 0, sumG = 0, sumB = 0;
+  for (let i = 0; i < img.length; i += 4) {
+    sumR += img[i];
+    sumG += img[i + 1];
+    sumB += img[i + 2];
+  }
+
+  return {
+    R: sumR / n,
+    G: sumG / n,
+    B: sumB / n,
+  };
+}
+
+function chromForRoi(frameCtx, roi) {
+  const rgb = rgbMeanForRoi(frameCtx, roi);
+  if (!rgb || rgb.R < 1 || rgb.G < 1 || rgb.B < 1) return null;
+
+  const { R, G, B } = rgb;
+  const C1 = R / G;
+  const C2 = B / G;
+  const S1 = C1 - 1;
+  const S2 = C1 + C2 - 2;
+  const H = S1 + S2;
+
+  return {
+    R,
+    G,
+    B,
+    C1,
+    C2,
+    S1,
+    S2,
+    H,
+  };
+}
+
+export function getChromValues(frameCtx, rois, tsMs) {
+  const values = [];
+  for (const roi of rois) {
+    const chrom = chromForRoi(frameCtx, roi);
+    if (chrom) {
+      values.push({ ...chrom, t: tsMs / 1000 });
+    }
+  }
+  return values;
+}
+
 // Legacy export for backwards compatibility (single ROI, raw green mean)
 export function getGreenMean(frameCtx, roi, tsMs) {
-  const { x, y, w, h } = roi;
-  const img = frameCtx.getImageData(x, y, w, h).data;
-  let sumG = 0;
-  const n = w * h;
-  for (let i = 0; i < img.length; i += 4) sumG += img[i + 1];
-  return { g: sumG / n, t: tsMs / 1000 };
+  const rgb = rgbMeanForRoi(frameCtx, roi);
+  return {
+    g: rgb ? rgb.G : 0,
+    t: tsMs / 1000,
+  };
 }
