@@ -34,59 +34,80 @@ let lastHz = null;
 export function estimateBpmFromWindow(x, fs) {
   if (!x || x.length < 64 || !Number.isFinite(fs) || fs <= 0) return null;
 
-  let y = x.slice();
-  const mean = y.reduce((a, b) => a + b, 0) / y.length;
-  y = y.map(v => v - mean);
+  const y = x.slice();
+  const mean = y.reduce((sum, v) => sum + v, 0) / y.length;
+  for (let i = 0; i < y.length; i++) y[i] -= mean;
 
-  // raised from 0.75 to 0.87 Hz cuts the 45-51 BPM false locks entirely
   const fHP = 0.87;
   const fLP = 3.0;
-  y = biquadHighpass(y, fs, fHP);
-  y = biquadLowpass(y, fs, fLP);
+  const filtered = biquadHighpass(y, fs, fHP);
+  const bandpassed = biquadLowpass(filtered, fs, fLP);
 
-  // Detect peaks in the filtered signal
-  const peaks = [];
-  const threshold = (Math.max(...y) + Math.min(...y)) / 2;
-  for (let i = 1; i < y.length - 1; i++) {
-    if (y[i] > y[i - 1] && y[i] > y[i + 1] && y[i] > threshold) {
-      peaks.push(i); // Index of peak
+  // FFT on the bandpassed signal before IBI estimation
+  const window = hann(bandpassed.length);
+  const winSig = bandpassed.map((v, i) => v * window[i]);
+  const mag = rfftMag(winSig);
+
+  const binHz = fs / bandpassed.length;
+  const minBin = Math.max(0, Math.floor(0.8 / binHz));
+  const maxBin = Math.min(mag.length - 1, Math.ceil(3.0 / binHz));
+
+  let peakBin = minBin;
+  let peakMag = -Infinity;
+  for (let k = minBin; k <= maxBin; k++) {
+    if (mag[k] > peakMag) {
+      peakMag = mag[k];
+      peakBin = k;
     }
   }
 
-  if (peaks.length < 3) return null; // Need at least 3 peaks for intact IBIs
+  const fftHz = peakBin * binHz;
+  const fftBpm = fftHz * 60;
+  if (!Number.isFinite(fftHz) || fftHz <= 0 || fftBpm < 48 || fftBpm > 180) return null;
 
-  // Compute IBIs only for consecutive peaks fully within the window (skip first and last)
+  const noiseFloor = mag
+    .slice(minBin, maxBin + 1)
+    .reduce((sum, v) => sum + v, 0) / Math.max(1, maxBin - minBin + 1);
+  if (peakMag / Math.max(noiseFloor, 1e-6) < SNR_THRESHOLD) return null;
+
+  const peaks = [];
+  const threshold = (Math.max(...bandpassed) + Math.min(...bandpassed)) / 2;
+  for (let i = 1; i < bandpassed.length - 1; i++) {
+    if (
+      bandpassed[i] > bandpassed[i - 1] &&
+      bandpassed[i] > bandpassed[i + 1] &&
+      bandpassed[i] > threshold
+    ) {
+      peaks.push(i);
+    }
+  }
+
+  if (peaks.length < 3) return null;
+
   const intactIbIs = [];
   for (let i = 1; i < peaks.length - 1; i++) {
-    const ibi = (peaks[i] - peaks[i - 1]) / fs; // IBI in seconds
-    if (ibi > 0.3 && ibi < 3) { // Reasonable IBI range (20-200 BPM)
-      intactIbIs.push(ibi);
-    }
+    const ibi = (peaks[i] - peaks[i - 1]) / fs;
+    if (ibi >= 0.3 && ibi <= 3) intactIbIs.push(ibi);
   }
 
   if (intactIbIs.length === 0) return null;
 
-  // Average the intact IBIs
   const meanIbi = intactIbIs.reduce((a, b) => a + b, 0) / intactIbIs.length;
+  const ibiBpm = 60 / meanIbi;
+  if (ibiBpm < 48 || ibiBpm > 180) return null;
+  if (Math.abs(ibiBpm - fftBpm) > OUTLIER_BPM) return null;
 
-  // BPM = 60 / mean_IBI
-  const rawBpm = 60 / meanIbi;
-
-  if (rawBpm < 52 || rawBpm > 180) return null;  // hard floor at 52 BPM
-
-  // Outlier clamp — reject if too far from last accepted reading
   if (lastHz !== null) {
     const priorBpm = lastHz * 60;
-    if (Math.abs(rawBpm - priorBpm) > OUTLIER_BPM) return null;
+    if (Math.abs(ibiBpm - priorBpm) > OUTLIER_BPM) return null;
   }
 
-  lastHz = rawBpm / 60; // Update lastHz for continuity
-  bpmHistory.push(rawBpm);
+  lastHz = ibiBpm / 60;
+  bpmHistory.push(ibiBpm);
   if (bpmHistory.length > MAX_HISTORY) bpmHistory.shift();
 
   return median(bpmHistory);
 }
-
 export function resetDsp() {
   bpmHistory.length = 0;
   lastHz = null;
