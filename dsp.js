@@ -44,49 +44,34 @@ export function estimateBpmFromWindow(x, fs) {
   y = biquadHighpass(y, fs, fHP);
   y = biquadLowpass(y, fs, fLP);
 
-  const w = hann(y.length);
-  const yw = y.map((v, i) => v * w[i]);
-  const mag = rfftMag(yw);
-
-  const kMin = Math.max(1, Math.ceil(fHP * y.length / fs));
-  const kMax = Math.min(mag.length - 2, Math.floor(fLP * y.length / fs));
-  if (kMax <= kMin) return null;
-
-  // SNR gate
-  const bandMag = mag.slice(kMin, kMax + 1);
-  const noiseFloor = median(bandMag);
-  const peakRaw = Math.max(...bandMag);
-  if (noiseFloor <= 0 || peakRaw / noiseFloor < SNR_THRESHOLD) return null;
-
-  // Weighted peak search with soft continuity prior
-  const weights = new Array(kMax - kMin + 1).fill(1.0);
-  if (lastHz !== null) {
-    const kPrior = lastHz * y.length / fs;
-    for (let k = kMin; k <= kMax; k++) {
-      const diffHz = (k - kPrior) * fs / y.length;
-      const gauss = Math.exp(-(diffHz * diffHz) / (2 * PRIOR_SIGMA * PRIOR_SIGMA));
-      weights[k - kMin] = 1.0 - PRIOR_WEIGHT + PRIOR_WEIGHT * gauss;
+  // Detect peaks in the filtered signal
+  const peaks = [];
+  const threshold = (Math.max(...y) + Math.min(...y)) / 2;
+  for (let i = 1; i < y.length - 1; i++) {
+    if (y[i] > y[i - 1] && y[i] > y[i + 1] && y[i] > threshold) {
+      peaks.push(i); // Index of peak
     }
   }
 
-  let bestK = kMin, bestVal = -Infinity;
-  for (let k = kMin; k <= kMax; k++) {
-    const v = mag[k] * weights[k - kMin];
-    if (v > bestVal) { bestVal = v; bestK = k; }
+  if (peaks.length < 3) return null; // Need at least 3 peaks for intact IBIs
+
+  // Compute IBIs only for consecutive peaks fully within the window (skip first and last)
+  const intactIbIs = [];
+  for (let i = 1; i < peaks.length - 1; i++) {
+    const ibi = (peaks[i] - peaks[i - 1]) / fs; // IBI in seconds
+    if (ibi > 0.3 && ibi < 3) { // Reasonable IBI range (20-200 BPM)
+      intactIbIs.push(ibi);
+    }
   }
 
-  // Parabolic interpolation for sub-bin accuracy
-  let freqHz;
-  if (bestK > 0 && bestK < mag.length - 1) {
-    const alpha = mag[bestK - 1], beta = mag[bestK], gamma = mag[bestK + 1];
-    const denom = alpha - 2 * beta + gamma;
-    const delta = denom !== 0 ? 0.5 * (alpha - gamma) / denom : 0;
-    freqHz = ((bestK + Math.max(-0.5, Math.min(0.5, delta))) * fs) / y.length;
-  } else {
-    freqHz = (bestK * fs) / y.length;
-  }
+  if (intactIbIs.length === 0) return null;
 
-  const rawBpm = freqHz * 60;
+  // Average the intact IBIs
+  const meanIbi = intactIbIs.reduce((a, b) => a + b, 0) / intactIbIs.length;
+
+  // BPM = 60 / mean_IBI
+  const rawBpm = 60 / meanIbi;
+
   if (rawBpm < 52 || rawBpm > 180) return null;  // hard floor at 52 BPM
 
   // Outlier clamp — reject if too far from last accepted reading
@@ -95,7 +80,7 @@ export function estimateBpmFromWindow(x, fs) {
     if (Math.abs(rawBpm - priorBpm) > OUTLIER_BPM) return null;
   }
 
-  lastHz = freqHz;
+  lastHz = rawBpm / 60; // Update lastHz for continuity
   bpmHistory.push(rawBpm);
   if (bpmHistory.length > MAX_HISTORY) bpmHistory.shift();
 
