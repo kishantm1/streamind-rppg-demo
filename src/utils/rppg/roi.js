@@ -1,41 +1,92 @@
-// ROI (Region of Interest) calculation from face landmarks
-// Computes forehead rectangle from MediaPipe face landmarks
+// roi.js
+// Computes three skin ROIs from MediaPipe face landmarks:
+//   [0] forehead   — tight strip between brow-top ridge and mid-forehead
+//   [1] left-cheek — hull of the left cheekbone landmarks
+//   [2] right-cheek— hull of the right cheekbone landmarks
+//
+// The forehead box is clamped:
+//   - bottom edge: hard-clamped above the lowest brow-top landmark so
+//                  eyebrows never enter the ROI
+//   - top edge:    built from mid-forehead points (151 and neighbours) —
+//                  landmark 10 (hairline) is intentionally excluded
 
-function clamp(v, lo, hi) {
-  return Math.max(lo, Math.min(hi, v))
+const PAD = 0.08; // fraction of landmark-hull span to pad outward
+
+/**
+ * @param {Array}  landmarks - MediaPipe 478-point landmarks (normalised [0,1])
+ * @param {number} W         - canvas width in pixels
+ * @param {number} H         - canvas height in pixels
+ * @returns {Array<{x:number, y:number, w:number, h:number, label:string}>}
+ */
+export function getRois(landmarks, W, H) {
+  const browTopIdx = [70, 63, 105, 66, 107, 336, 296, 334, 293, 300];
+  const midForeheadIdx = [54, 68, 104, 69, 108, 151, 337, 299, 333, 298];
+  const foreheadIdx = [...browTopIdx, ...midForeheadIdx];
+
+  // Viewer's left = face's anatomical right, per MediaPipe convention
+  const leftCheekIdx = [117, 118, 101, 36, 205, 187, 123];
+  const rightCheekIdx = [346, 347, 330, 266, 425, 411, 352];
+
+  const fhRoi = roiFromIndices(landmarks, foreheadIdx, W, H, 'forehead');
+
+  // Hard-clamp bottom edge to the lowest brow-top landmark
+  let maxBrowY = -Infinity;
+  for (const idx of browTopIdx) {
+    const lm = landmarks[idx];
+    if (lm && lm.y > maxBrowY) maxBrowY = lm.y;
+  }
+  const browYpx = maxBrowY * H;
+  if (fhRoi.y + fhRoi.h > browYpx) {
+    fhRoi.h = Math.max(8, Math.round(browYpx - fhRoi.y));
+  }
+
+  return [
+    fhRoi,
+    roiFromIndices(landmarks, leftCheekIdx, W, H, 'left-cheek'),
+    roiFromIndices(landmarks, rightCheekIdx, W, H, 'right-cheek'),
+  ];
 }
 
-export function foreheadRectFromLandmarks(landmarks, W, H) {
-  // Find bounding box around all landmarks in normalized coordinates
-  let minX = 1, minY = 1, maxX = 0, maxY = 0
+function roiFromIndices(landmarks, indices, W, H, label) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
-  for (const lm of landmarks) {
-    if (lm.x < minX) minX = lm.x
-    if (lm.y < minY) minY = lm.y
-    if (lm.x > maxX) maxX = lm.x
-    if (lm.y > maxY) maxY = lm.y
+  for (const idx of indices) {
+    const lm = landmarks[idx];
+    if (!lm) continue;
+    if (lm.x < minX) minX = lm.x;
+    if (lm.y < minY) minY = lm.y;
+    if (lm.x > maxX) maxX = lm.x;
+    if (lm.y > maxY) maxY = lm.y;
   }
 
-  // Convert bounding box from normalized to pixels
-  const x = minX * W
-  const y = minY * H
-  const w = (maxX - minX) * W
-  const h = (maxY - minY) * H
+  let x = minX * W;
+  let y = minY * H;
+  let w = (maxX - minX) * W;
+  let h = (maxY - minY) * H;
 
-  // Define forehead ROI as small strip near top center of face box
-  const roiH = Math.max(8, h * 0.11) // 11% of face height
-  const roiW = Math.max(8, w * 0.30) // 30% of face width
+  const px = w * PAD;
+  const py = h * PAD;
+  x -= px; y -= py;
+  w += 2 * px; h += 2 * py;
 
-  // Center horizontally
-  const roiX = clamp(x + (w - roiW) / 2, 0, W - roiW)
+  x = Math.max(0, x);
+  y = Math.max(0, y);
+  w = Math.min(w, W - x);
+  h = Math.min(h, H - y);
 
-  // Place near top of face box
-  const roiY = clamp(y + h * 0.01, 0, H - roiH)
+  w = Math.max(w, 8);
+  h = Math.max(h, 8);
 
   return {
-    x: Math.round(roiX),
-    y: Math.round(roiY),
-    w: Math.round(roiW),
-    h: Math.round(roiH)
-  }
+    x: Math.round(x),
+    y: Math.round(y),
+    w: Math.round(w),
+    h: Math.round(h),
+    label,
+  };
+}
+
+// Legacy single-ROI export — returns just the forehead box.
+export function foreheadRectFromLandmarks(landmarks, W, H) {
+  return getRois(landmarks, W, H)[0];
 }

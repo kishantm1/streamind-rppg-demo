@@ -157,6 +157,18 @@ function History() {
                   </span>
                 </div>
               </div>
+              {typeof session.bleAvgBpm === 'number' && (
+                <div className="session-card__ble">
+                  <span className="session-card__ble-label">BLE</span>
+                  <span className="session-card__ble-value">{session.bleAvgBpm}</span>
+                  <span className="session-card__ble-unit">BPM avg</span>
+                  {typeof session.bleMinBpm === 'number' && typeof session.bleMaxBpm === 'number' && (
+                    <span className="session-card__ble-range">
+                      ({session.bleMinBpm}–{session.bleMaxBpm})
+                    </span>
+                  )}
+                </div>
+              )}
             </article>
           ))}
         </div>

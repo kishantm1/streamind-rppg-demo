@@ -228,6 +228,42 @@
   color: var(--calm-500);
 }
 
+.session-card__ble {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px dashed var(--border-color);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.session-card__ble-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--warning);
+}
+
+.session-card__ble-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.session-card__ble-unit {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.session-card__ble-range {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 /* Empty State */
 .history__empty {
   display: flex;

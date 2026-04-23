@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
-  foreheadRectFromLandmarks,
-  getGreenMean,
+  getRois,
+  getPosSignal,
   RingBuffer,
-  estimateBpmFromWindow
+  estimateBpmFromWindow,
+  resetDsp
 } from '../utils/rppg'
 
 // Status constants
@@ -133,14 +134,14 @@ export function useRPPG() {
         // Draw face mesh on overlay
         drawFaceMesh(overlayCtx, landmarks, W, H)
 
-        // Get forehead ROI
-        const roi = foreheadRectFromLandmarks(landmarks, W, H)
+        // Get forehead + cheek ROIs
+        const rois = getRois(landmarks, W, H)
 
-        // Draw ROI rectangle
-        drawROI(overlayCtx, roi)
+        // Draw ROI rectangles (green = forehead, orange = left cheek, blue = right cheek)
+        drawROIs(overlayCtx, rois)
 
-        // Extract green channel mean
-        const { g, t } = getGreenMean(frameCtx, roi, timestamp)
+        // Extract POS signal averaged across all ROIs
+        const { g, t } = getPosSignal(frameCtx, rois, timestamp)
         buffer.push(t, g)
 
         // Update signal data for visualization
@@ -214,17 +215,25 @@ export function useRPPG() {
     }
   }
 
-  // Draw ROI rectangle
-  const drawROI = (ctx, roi) => {
-    ctx.strokeStyle = 'rgba(34, 197, 94, 0.8)' // Green for ROI
-    ctx.lineWidth = 2
-    ctx.setLineDash([5, 5])
-    ctx.strokeRect(roi.x, roi.y, roi.w, roi.h)
-    ctx.setLineDash([])
+  // Draw multiple ROI rectangles with per-label colors
+  const drawROIs = (ctx, rois) => {
+    const colorsByLabel = {
+      'forehead':    { stroke: 'rgba(34, 197, 94, 0.8)',  fill: 'rgba(34, 197, 94, 0.1)'  },
+      'left-cheek':  { stroke: 'rgba(249, 115, 22, 0.8)', fill: 'rgba(249, 115, 22, 0.1)' },
+      'right-cheek': { stroke: 'rgba(59, 130, 246, 0.8)', fill: 'rgba(59, 130, 246, 0.1)' },
+    }
+    const fallback = { stroke: 'rgba(34, 197, 94, 0.8)', fill: 'rgba(34, 197, 94, 0.1)' }
 
-    // Fill with semi-transparent
-    ctx.fillStyle = 'rgba(34, 197, 94, 0.1)'
-    ctx.fillRect(roi.x, roi.y, roi.w, roi.h)
+    ctx.lineWidth = 2
+    for (const roi of rois) {
+      const color = colorsByLabel[roi.label] ?? fallback
+      ctx.strokeStyle = color.stroke
+      ctx.setLineDash([5, 5])
+      ctx.strokeRect(roi.x, roi.y, roi.w, roi.h)
+      ctx.setLineDash([])
+      ctx.fillStyle = color.fill
+      ctx.fillRect(roi.x, roi.y, roi.w, roi.h)
+    }
   }
 
   // Start session
@@ -236,8 +245,9 @@ export function useRPPG() {
       setSignalData([])
       bpmHistoryRef.current = []
 
-      // Initialize buffer
+      // Initialize buffer and clear any DSP state from prior sessions
       bufferRef.current = new RingBuffer(10, 30)
+      resetDsp()
 
       // Request camera
       setStatus(STATUS.REQUESTING_CAMERA)
