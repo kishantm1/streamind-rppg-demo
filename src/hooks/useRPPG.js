@@ -1,8 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   getRois,
-  getPosSignal,
+  getRgbSignal,
   RingBuffer,
+  posSlidingWindow,
   estimateBpmFromWindow,
   resetDsp
 } from '../utils/rppg'
@@ -94,6 +95,38 @@ export function useRPPG() {
     }
   }, [])
 
+  // Freeze auto-exposure / auto-white-balance / auto-focus after a short
+  // settle period so slow illumination drift doesn't leak into the pulse band.
+  // Silently falls back to auto on browsers/devices that don't support it.
+  const lockCameraSettings = useCallback((stream) => {
+    const track = stream?.getVideoTracks?.()[0]
+    if (!track?.getCapabilities || !track.applyConstraints) return
+
+    setTimeout(async () => {
+      if (!streamRef.current || track.readyState !== 'live') return
+      let caps
+      try { caps = track.getCapabilities() } catch { return }
+
+      const advanced = []
+      if (Array.isArray(caps.exposureMode) && caps.exposureMode.includes('manual')) {
+        advanced.push({ exposureMode: 'manual' })
+      }
+      if (Array.isArray(caps.whiteBalanceMode) && caps.whiteBalanceMode.includes('manual')) {
+        advanced.push({ whiteBalanceMode: 'manual' })
+      }
+      if (Array.isArray(caps.focusMode) && caps.focusMode.includes('manual')) {
+        advanced.push({ focusMode: 'manual' })
+      }
+      if (advanced.length === 0) return
+
+      try {
+        await track.applyConstraints({ advanced })
+      } catch (err) {
+        console.warn('Camera lock rejected, continuing with auto modes:', err)
+      }
+    }, 2000)
+  }, [])
+
   // Detection loop
   const runDetectionLoop = useCallback(() => {
     const video = videoRef.current
@@ -140,14 +173,13 @@ export function useRPPG() {
         // Draw ROI rectangles (green = forehead, orange = left cheek, blue = right cheek)
         drawROIs(overlayCtx, rois)
 
-        // Extract POS signal averaged across all ROIs
-        const { g, t } = getPosSignal(frameCtx, rois, timestamp)
-        buffer.push(t, g)
+        // Extract per-frame ROI-averaged RGB means
+        const rgb = getRgbSignal(frameCtx, rois, timestamp)
+        if (rgb) buffer.push(rgb.t, rgb.r, rgb.g, rgb.b)
 
-        // Update signal data for visualization
+        // Update signal data for visualization (raw green channel)
         const samples = buffer.getSamples()
         if (samples.length > 0) {
-          // Get last 150 samples for display
           const displaySamples = samples.slice(-150).map((s) => s.g)
           setSignalData(displaySamples)
         }
@@ -156,11 +188,12 @@ export function useRPPG() {
         const now = performance.now()
         if (now - lastBpmTimeRef.current > 1000) {
           lastBpmTimeRef.current = now
-          const { y } = buffer.values()
+          const { R, G, B, n } = buffer.values()
           const fs = buffer.fs
 
-          if (y.length >= 128 && fs > 0) {
-            const estimatedBpm = estimateBpmFromWindow(y, fs)
+          if (n >= 128 && fs > 0) {
+            const pulse = posSlidingWindow(R, G, B, fs)
+            const estimatedBpm = estimateBpmFromWindow(pulse, fs)
             if (estimatedBpm !== null) {
               setBpm(Math.round(estimatedBpm))
               bpmHistoryRef.current.push(estimatedBpm)
@@ -246,13 +279,14 @@ export function useRPPG() {
       bpmHistoryRef.current = []
 
       // Initialize buffer and clear any DSP state from prior sessions
-      bufferRef.current = new RingBuffer(10, 30)
+      bufferRef.current = new RingBuffer(15, 30)
       resetDsp()
 
       // Request camera
       setStatus(STATUS.REQUESTING_CAMERA)
       const stream = await initializeCamera()
       streamRef.current = stream
+      lockCameraSettings(stream)
 
       // Set video source
       if (videoRef.current) {
@@ -284,7 +318,7 @@ export function useRPPG() {
       setIsLoading(false)
       stopSession()
     }
-  }, [initializeCamera, initializeLandmarker, runDetectionLoop])
+  }, [initializeCamera, initializeLandmarker, lockCameraSettings, runDetectionLoop])
 
   // Stop session and return session data
   const stopSession = useCallback(() => {

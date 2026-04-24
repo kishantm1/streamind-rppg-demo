@@ -24,7 +24,10 @@ let lastHz = null;
 export function estimateBpmFromWindow(x, fs) {
   if (!x || x.length < 64 || !Number.isFinite(fs) || fs <= 0) return null;
 
-  let y = x.slice();
+  // Remove slow drift (exposure/WB creep, posture shifts) before filtering.
+  // A 2nd-order polynomial over the analysis window captures baseline wander
+  // without representing anything near pulse frequencies.
+  let y = detrendPoly(x);
   const mean = y.reduce((a, b) => a + b, 0) / y.length;
   y = y.map(v => v - mean);
 
@@ -143,4 +146,40 @@ function median(arr) {
   if (!arr?.length) return null;
   const s = arr.slice().sort((a, b) => a - b), mid = Math.floor(s.length / 2);
   return s.length % 2 === 1 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+// Subtract the best-fit quadratic a·t² + b·t + c from y (t = sample index).
+// Closed-form OLS via Cramer's rule on the 3×3 normal-equations matrix.
+// Returns the input unchanged if the system is singular.
+function detrendPoly(y) {
+  const N = y.length;
+  if (N < 3) return y.slice();
+
+  let s0 = N, s1 = 0, s2 = 0, s3 = 0, s4 = 0;
+  let q0 = 0, q1 = 0, q2 = 0;
+  for (let i = 0; i < N; i++) {
+    const t = i, t2 = t * t, v = y[i];
+    s1 += t; s2 += t2; s3 += t2 * t; s4 += t2 * t2;
+    q0 += v; q1 += v * t; q2 += v * t2;
+  }
+
+  const m11 = s2 * s4 - s3 * s3;
+  const m12 = s1 * s4 - s2 * s3;
+  const m13 = s1 * s3 - s2 * s2;
+  const det = s0 * m11 - s1 * m12 + s2 * m13;
+  if (Math.abs(det) < 1e-12) return y.slice();
+
+  const detC = q0 * m11 - s1 * (q1 * s4 - q2 * s3) + s2 * (q1 * s3 - q2 * s2);
+  const detB = s0 * (q1 * s4 - q2 * s3) - q0 * m12 + s2 * (s1 * q2 - s2 * q1);
+  const detA = s0 * (s2 * q2 - s3 * q1) - s1 * (s1 * q2 - s2 * q1) + q0 * m13;
+
+  const c = detC / det;
+  const b = detB / det;
+  const a = detA / det;
+
+  const out = new Array(N);
+  for (let i = 0; i < N; i++) {
+    out[i] = y[i] - (a * i * i + b * i + c);
+  }
+  return out;
 }
