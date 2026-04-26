@@ -1,12 +1,8 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
-import { useAuth } from './AuthContext'
 
 const SessionContext = createContext()
 
 export function SessionProvider({ children }) {
-  const { user } = useAuth()
-
   const [sessions, setSessions] = useState(() => {
     const saved = localStorage.getItem('rppg-sessions')
     return saved ? JSON.parse(saved) : []
@@ -32,40 +28,11 @@ export function SessionProvider({ children }) {
       ...session,
     }
     setSessions((prev) => [newSession, ...prev].slice(0, 100))
-
-    if (user) {
-      supabase
-        .from('rppg_sessions')
-        .insert({
-          user_id: user.id,
-          recorded_at: newSession.timestamp,
-          avg_bpm: newSession.avgBpm,
-          min_bpm: newSession.minBpm,
-          max_bpm: newSession.maxBpm,
-          duration_s: newSession.duration,
-          ble_avg_bpm: newSession.bleAvgBpm ?? null,
-          ble_min_bpm: newSession.bleMinBpm ?? null,
-          ble_max_bpm: newSession.bleMaxBpm ?? null,
-        })
-        .then(({ error }) => {
-          if (error) console.error('Supabase session insert failed:', error)
-        })
-    }
-
     return newSession
   }
 
   const clearSessions = () => {
     setSessions([])
-    if (user) {
-      supabase
-        .from('rppg_sessions')
-        .delete()
-        .eq('user_id', user.id)
-        .then(({ error }) => {
-          if (error) console.error('Supabase session clear failed:', error)
-        })
-    }
   }
 
   const addMood = (mood) => {
@@ -75,36 +42,11 @@ export function SessionProvider({ children }) {
       ...mood,
     }
     setMoods((prev) => [newMood, ...prev].slice(0, 100))
-
-    if (user) {
-      supabase
-        .from('rppg_moods')
-        .insert({
-          user_id: user.id,
-          recorded_at: newMood.timestamp,
-          mood: newMood.mood,
-          note: newMood.note ?? null,
-          bpm: newMood.bpm ?? null,
-        })
-        .then(({ error }) => {
-          if (error) console.error('Supabase mood insert failed:', error)
-        })
-    }
-
     return newMood
   }
 
   const clearMoods = () => {
     setMoods([])
-    if (user) {
-      supabase
-        .from('rppg_moods')
-        .delete()
-        .eq('user_id', user.id)
-        .then(({ error }) => {
-          if (error) console.error('Supabase mood clear failed:', error)
-        })
-    }
   }
 
   const getRecentStats = () => {
