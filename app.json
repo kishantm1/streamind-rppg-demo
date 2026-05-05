@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "Streamind rPPG",
+    "slug": "streamind-rppg",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "streamindrppg",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "splash": {
+      "backgroundColor": "#0f172a",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.streamind.rppg",
+      "infoPlist": {
+        "NSCameraUsageDescription": "We use the front camera to estimate your heart rate from subtle skin-color changes (rPPG).",
+        "NSBluetoothAlwaysUsageDescription": "Connect a Bluetooth heart-rate monitor to compare against camera measurements.",
+        "NSBluetoothPeripheralUsageDescription": "Connect a Bluetooth heart-rate monitor to compare against camera measurements.",
+        "UIBackgroundModes": ["bluetooth-central"]
+      }
+    },
+    "android": {
+      "package": "com.streamind.rppg",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "Streamind needs camera access to estimate heart rate from your face.",
+          "enableMicrophonePermission": false,
+          "enableFrameProcessors": true
+        }
+      ],
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": ["central"],
+          "bluetoothAlwaysPermission": "Streamind uses Bluetooth to read heart-rate data from compatible monitors."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
