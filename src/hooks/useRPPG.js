@@ -1,16 +1,21 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
-  foreheadRectFromLandmarks,
-  getGreenMean,
+  getRois,
+  getPosSignal,
   RingBuffer,
-  estimateBpmFromWindow
+  estimateBpmFromWindow,
+  resetDsp
 } from '../utils/rppg'
+
+// Minimum seconds of samples required before emitting BPM (from improved/script.js)
+const MIN_BUF_SECS = 9
 
 // Status constants
 const STATUS = {
   IDLE: 'idle',
   REQUESTING_CAMERA: 'Requesting camera access...',
   LOADING_MODEL: 'Loading face detection model...',
+  CALIBRATING: 'Calibrating...',
   RUNNING: 'Measuring heart rate...',
   NO_FACE: 'Position your face in the frame',
   ERROR: 'error'
@@ -27,6 +32,8 @@ export function useRPPG() {
   const lastBpmTimeRef = useRef(0)
   const sessionStartRef = useRef(null)
   const bpmHistoryRef = useRef([])
+  const firstSampleTsRef = useRef(null)
+  const hasWarmedUpRef = useRef(false)
 
   // State
   const [isLoading, setIsLoading] = useState(false)
@@ -128,20 +135,20 @@ export function useRPPG() {
 
       if (results.faceLandmarks && results.faceLandmarks.length > 0) {
         const landmarks = results.faceLandmarks[0]
-        setStatus(STATUS.RUNNING)
 
         // Draw face mesh on overlay
         drawFaceMesh(overlayCtx, landmarks, W, H)
 
-        // Get forehead ROI
-        const roi = foreheadRectFromLandmarks(landmarks, W, H)
+        // Get three skin ROIs: forehead + left cheek + right cheek
+        const rois = getRois(landmarks, W, H)
 
-        // Draw ROI rectangle
-        drawROI(overlayCtx, roi)
+        // Draw all ROI rectangles
+        drawROIs(overlayCtx, rois)
 
-        // Extract green channel mean
-        const { g, t } = getGreenMean(frameCtx, roi, timestamp)
+        // Extract POS signal across all ROIs
+        const { g, t } = getPosSignal(frameCtx, rois, timestamp)
         buffer.push(t, g)
+        if (firstSampleTsRef.current === null) firstSampleTsRef.current = timestamp
 
         // Update signal data for visualization
         const samples = buffer.getSamples()
@@ -155,14 +162,21 @@ export function useRPPG() {
         const now = performance.now()
         if (now - lastBpmTimeRef.current > 1000) {
           lastBpmTimeRef.current = now
-          const { y } = buffer.values()
-          const fs = buffer.fs
 
-          if (y.length >= 128 && fs > 0) {
-            const estimatedBpm = estimateBpmFromWindow(y, fs)
-            if (estimatedBpm !== null) {
-              setBpm(Math.round(estimatedBpm))
-              bpmHistoryRef.current.push(estimatedBpm)
+          const elapsed = (timestamp - firstSampleTsRef.current) / 1000
+          if (elapsed >= MIN_BUF_SECS) hasWarmedUpRef.current = true
+
+          if (!hasWarmedUpRef.current) {
+            setStatus(STATUS.CALIBRATING)
+          } else {
+            setStatus(STATUS.RUNNING)
+            const win = buffer.values()
+            if (win.y.length >= 128 && win.dt > 0) {
+              const estimatedBpm = estimateBpmFromWindow(win.y, 1 / win.dt)
+              if (estimatedBpm !== null) {
+                setBpm(Math.round(estimatedBpm))
+                bpmHistoryRef.current.push(estimatedBpm)
+              }
             }
           }
         }
@@ -214,17 +228,25 @@ export function useRPPG() {
     }
   }
 
-  // Draw ROI rectangle
-  const drawROI = (ctx, roi) => {
-    ctx.strokeStyle = 'rgba(34, 197, 94, 0.8)' // Green for ROI
-    ctx.lineWidth = 2
-    ctx.setLineDash([5, 5])
-    ctx.strokeRect(roi.x, roi.y, roi.w, roi.h)
-    ctx.setLineDash([])
+  // Draw all ROI rectangles (forehead + left cheek + right cheek)
+  const ROI_COLORS = ['#4caf50', '#ff9800', '#2196f3'] // green, orange, blue
+  const drawROIs = (ctx, rois) => {
+    for (let i = 0; i < rois.length; i++) {
+      const roi = rois[i]
+      const color = ROI_COLORS[i % ROI_COLORS.length]
 
-    // Fill with semi-transparent
-    ctx.fillStyle = 'rgba(34, 197, 94, 0.1)'
-    ctx.fillRect(roi.x, roi.y, roi.w, roi.h)
+      ctx.strokeStyle = color
+      ctx.lineWidth = 2
+      ctx.setLineDash([5, 5])
+      ctx.strokeRect(roi.x, roi.y, roi.w, roi.h)
+      ctx.setLineDash([])
+
+      if (roi.label) {
+        ctx.fillStyle = color
+        ctx.font = '11px system-ui, sans-serif'
+        ctx.fillText(roi.label, roi.x + 2, Math.max(roi.y - 3, 10))
+      }
+    }
   }
 
   // Start session
@@ -235,6 +257,9 @@ export function useRPPG() {
       setBpm(null)
       setSignalData([])
       bpmHistoryRef.current = []
+      firstSampleTsRef.current = null
+      hasWarmedUpRef.current = false
+      resetDsp()
 
       // Initialize buffer
       bufferRef.current = new RingBuffer(10, 30)
@@ -315,6 +340,9 @@ export function useRPPG() {
     setStatus(STATUS.IDLE)
     bufferRef.current = null
     sessionStartRef.current = null
+    firstSampleTsRef.current = null
+    hasWarmedUpRef.current = false
+    resetDsp()
 
     return sessionData
   }, [])

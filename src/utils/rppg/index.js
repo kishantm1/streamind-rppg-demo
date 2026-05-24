@@ -1,4 +1,4 @@
-export { foreheadRectFromLandmarks } from './roi'
-export { getGreenMean } from './green'
+export { getRois, foreheadRectFromLandmarks } from './roi'
+export { getPosSignal, getGreenMean } from './green'
 export { RingBuffer } from './buffer'
-export { estimateBpmFromWindow } from './dsp'
+export { estimateBpmFromWindow, resetDsp } from './dsp'
