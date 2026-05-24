@@ -37,6 +37,12 @@
   letter-spacing: -0.02em;
 }
 
+.header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
 .header__theme-toggle {
   display: flex;
   align-items: center;

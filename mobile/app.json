@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Streamind rPPG",
+    "slug": "streamind-rppg",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "streamind",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0c4a6e",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.streamind.rppg",
+      "infoPlist": {
+        "NSCameraUsageDescription": "We use the camera to estimate your heart rate from subtle skin color changes (rPPG). Video never leaves your device.",
+        "NSMicrophoneUsageDescription": "Not used. Required only because the WebView's getUserMedia API enumerates audio devices."
+      }
+    },
+    "android": {
+      "package": "com.streamind.rppg",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-asset"
+    ]
+  }
+}

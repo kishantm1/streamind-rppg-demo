@@ -1,0 +1,14 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+.DS_Store
+
+# Native build artifacts
+ios/
+android/
+
+# Local env
+.env
+.env.local
